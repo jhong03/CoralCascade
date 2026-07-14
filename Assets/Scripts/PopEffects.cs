@@ -175,14 +175,20 @@ namespace CoralCascade
         /// </summary>
         public void ScorePopup(Vector2 pos, int amount, Color color)
         {
-            if (amount <= 0 || BuiltinFont() == null || _livePops.Count >= MaxTextPops) return;
+            if (amount > 0) FloatingText(pos, "+" + amount, color);
+        }
+
+        /// <summary>Any short floating text (e.g. "+1 SHOT") — rises and fades like a score pop.</summary>
+        public void FloatingText(Vector2 pos, string text, Color color)
+        {
+            if (BuiltinFont() == null || _livePops.Count >= MaxTextPops) return;
 
             TextPop p = _popPool.Count > 0 ? _popPool.Pop() : CreateTextPop();
             if (p == null) return;
             p.T.gameObject.SetActive(true);
             p.T.position = new Vector3(pos.x + Range(-0.15f, 0.15f), pos.y + 0.25f, 0f);
-            p.Main.text = "+" + amount;
-            p.Shadow.text = p.Main.text;
+            p.Main.text = text;
+            p.Shadow.text = text;
             p.Color = color;
             p.Age = 0f;
             p.Life = 0.85f;

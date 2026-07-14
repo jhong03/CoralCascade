@@ -145,6 +145,17 @@ preserve fairness), endless mode (reuses pressure + generator), share card, anal
 Standing caution: the Phase 1 exit gate (human play-test of cascade FEEL) is still pending —
 feel tunables (ImpactThreshold, slow-mo, shot speed) may need revisiting before deep polish.
 
+**Balance pass 2026-07-14 (user: late reefs "impossible"; math agreed — Reef 30 needed a
+sustained 5.2 net bubbles/shot):** (A) shot budget = 0.5/bubble × (1 + 12%/color beyond 4)
+× (1 + 40% of tide influx/shot), cap 30→40; 5th/6th colors delayed to Reef 13/25; tide
+slowed to every 10→8 shots; ceiling-row fill 0.85→0.7 (`BoardManager.PressureRowFill` —
+LevelCatalog budgets ASSUME this value, change together). NOTE: colorCount threshold change
+recolors some existing Reef layouts (structure/anchoring untouched — accepted). (B) cascade
+SHOT REFUND: one shot removing ≥`BoardManager.RefundThreshold` (8) bubbles refunds itself
+(+1 SHOT floating text at launcher; `Cascade.LastResolveDetached` = sync match+drops only,
+async chain knocks excluded on purpose — they already pay 4×). Tide-relief option (big
+clears delay the drop) was offered and declined for now.
+
 ## Art direction (agreed 2026-07-14; gameplay bubbles INTEGRATED same day)
 
 Style: **flat cartoon, bold outlines** (reads at bubble size on phones). Source: **asset

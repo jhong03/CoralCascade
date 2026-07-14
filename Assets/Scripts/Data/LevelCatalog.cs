@@ -66,7 +66,9 @@ namespace CoralCascade
 
             int columns = Math.Min(13, 9 + t / 7);
             int rows = Math.Min(11, 6 + t / 5);
-            int colorCount = Math.Min(6, 4 + (t >= 10 ? 1 : 0) + (t >= 20 ? 1 : 0));
+            // Balance pass 2026-07-14 (late reefs were mathematically unwinnable): the 5th
+            // and 6th colors arrive later — 6-color matching is the single harshest dial.
+            int colorCount = Math.Min(6, 4 + (t >= 12 ? 1 : 0) + (t >= 24 ? 1 : 0));
             double density = Math.Min(0.85, 0.68 + t * 0.006);
             // Obstacles enter mid-Adventure and ramp gently. Stones only below row 0
             // (a row-0 stone could never be removed — see BubbleColor.Stone).
@@ -125,13 +127,22 @@ namespace CoralCascade
                 foreach (char ch in grid[r]) if (ch != '.') bubbles++;
             }
 
-            int shots = Math.Max(10, Math.Min(30, (int)Math.Round(bubbles * 0.42)));
-
-            // Descending pressure enters at Reef 5 and tightens: drops come sooner and the
-            // danger line creeps toward the board. (Added AFTER the obstacle ramp — these
-            // fields don't consume rng draws, so existing layouts are unchanged.)
-            int pressureEvery = t >= 4 ? Math.Max(5, 8 - t / 8) : 0;
+            // Descending pressure enters at Reef 5 and tightens gently. Balance pass
+            // 2026-07-14: was every 8→5 shots — with 13 columns that added ~2.2 bubbles
+            // per shot, provably unclearable. Now 10→8, paired with thinner ceiling rows
+            // (see BoardManager.PressureRowFill) ⇒ ~1.1/shot influx at worst.
+            int pressureEvery = t >= 4 ? Math.Max(8, 10 - t / 12) : 0;
             int dangerRow = t >= 4 ? Math.Min(14, rows + Math.Max(3, 6 - t / 10)) : 0;
+
+            // Shot budget accounts for what makes shots miss (balance pass 2026-07-14):
+            // base 0.5/bubble, + 12% per color beyond 4, + ~40% of the expected tide
+            // influx per shot (fresh anchor rows clear cheaply). Cap raised 30 → 40; the
+            // cascade shot-refund (BoardManager) carries the rest on the biggest reefs.
+            double budget = bubbles * 0.5;
+            budget *= 1.0 + 0.12 * (colorCount - 4);
+            if (pressureEvery > 0)
+                budget *= 1.0 + 0.4 * (columns * 0.7 / pressureEvery);
+            int shots = Math.Max(10, Math.Min(40, (int)Math.Round(budget)));
 
             return new BoardLayoutData(name, columns, cellRows, shots,
                                        pressureEvery, dangerRow);

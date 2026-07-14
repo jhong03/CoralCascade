@@ -33,6 +33,12 @@ namespace CoralCascade
             if (ShotsRemaining > 0) ShotsRemaining--;
         }
 
+        /// <summary>Cascade shot-refund: big single-shot clears earn ammo back (skill sustains).</summary>
+        public void RefundShot()
+        {
+            if (State == GameState.Playing) ShotsRemaining++;
+        }
+
         /// <summary>
         /// Re-evaluate win/lose. Win is checked whenever the board might have been cleared
         /// (a secondary chain can clear it mid-fall); lose only once the table is quiet

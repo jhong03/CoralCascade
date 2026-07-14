@@ -39,6 +39,13 @@ namespace CoralCascade
         public int CascadeSize { get; private set; }
         public int SecondaryChains { get; private set; }
 
+        /// <summary>
+        /// Bubbles detached by the most recent SYNCHRONOUS shot resolution (match + drops;
+        /// async chain knocks excluded on purpose). BoardManager reads this for the
+        /// cascade shot-refund immediately after ResolveMatch/ResolveFloating returns.
+        /// </summary>
+        public int LastResolveDetached { get; private set; }
+
         /// <summary>True while any detached bubble is still falling.</summary>
         public bool IsActive => _activeFalling > 0;
 
@@ -105,7 +112,8 @@ namespace CoralCascade
                 else if (clusterSize >= 6)
                     fx.Announce("NICE POP!", Color.white, 1f);
             }
-            EvaluateSlowMo(CascadeSize - sizeBefore);
+            LastResolveDetached = CascadeSize - sizeBefore;
+            EvaluateSlowMo(LastResolveDetached);
             if (_activeFalling == 0)
                 FinishBurst(); // scripted mode, or nothing actually detached
         }
@@ -117,6 +125,7 @@ namespace CoralCascade
         /// </summary>
         public void ResolveFloating()
         {
+            LastResolveDetached = 0;
             var floating = _manager.Board.FindFloatingClusters();
             if (floating.Count == 0) return;
 
@@ -129,6 +138,7 @@ namespace CoralCascade
             if (dropped > 0 && PopEffects.Instance != null)
                 PopEffects.Instance.ScorePopup(TallyCenter(), dropped * ScoreKeeper.DroppedPoints,
                                                new Color(0.55f, 0.95f, 1f));
+            LastResolveDetached = dropped;
             EvaluateSlowMo(dropped);
             if (_activeFalling == 0)
                 FinishBurst();

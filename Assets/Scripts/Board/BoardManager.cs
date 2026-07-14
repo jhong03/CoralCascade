@@ -65,6 +65,13 @@ namespace CoralCascade
         /// <summary>True only during a projectile's flight — cascades do NOT block firing.</summary>
         public bool IsShotInFlight => _busy;
 
+        /// <summary>One shot refunded when a single shot removes this many bubbles (tunable).</summary>
+        public int RefundThreshold = 8;
+
+        /// <summary>Fill chance per cell of a descending ceiling row (balance dial —
+        /// LevelCatalog's shot budgets assume this value).</summary>
+        public const float PressureRowFill = 0.7f;
+
         public void Init(BoardView boardView, CascadeController cascade,
                          Launcher launcher, Transform projectileRoot,
                          float diameter, int defaultShots)
@@ -209,6 +216,19 @@ namespace CoralCascade
                 Cascade.ResolveFloating();
             }
 
+            // Cascade shot-refund (balance, 2026-07-14): a single shot that removes
+            // RefundThreshold+ bubbles earns its shot back — skill sustains ammo on the
+            // big reefs. Deterministic post-resolution reward; async chain knocks are
+            // deliberately excluded (they already pay 4× score).
+            if (State.State == GameState.Playing && Cascade.LastResolveDetached >= RefundThreshold)
+            {
+                State.RefundShot();
+                if (PopEffects.Instance != null)
+                    PopEffects.Instance.FloatingText(
+                        (Vector2)_launcher.transform.position + Vector2.up * 1.2f,
+                        "+1 SHOT", new Color(0.5f, 1f, 0.6f));
+            }
+
             HandlePressureAfterShot();
             EvaluateState();
         }
@@ -247,7 +267,7 @@ namespace CoralCascade
             var rng = new System.Random(StableHash(CurrentLayout.Name) ^ (_pressureDropIndex * 7919));
             var newRow = new BubbleColor[Board.Columns];
             for (int c = 0; c < newRow.Length; c++)
-                if (rng.NextDouble() < 0.85)
+                if (rng.NextDouble() < PressureRowFill)
                     newRow[c] = _pressurePalette[rng.Next(_pressurePalette.Count)];
 
             bool ok = Board.ShiftDown(newRow);
