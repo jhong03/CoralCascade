@@ -904,10 +904,16 @@ namespace CoralCascade
         private void DrawTankFish(Rect area, float sandTop, ReefItem item, int instance,
                                   float growth, float t, int h)
         {
-            var s = BubbleArt.Get(item.SpriteName);
-            if (s == null) return;
-            float w = 54f * _scale * item.SizeMul * growth;
-            float hgt = w * (s.rect.height / s.rect.width);
+            var s1 = BubbleArt.Get(item.SpriteName);
+            if (s1 == null) return;
+            var s2 = string.IsNullOrEmpty(item.SpriteName2) ? null : BubbleArt.Get(item.SpriteName2);
+
+            // Two-tile fish (the eel) compose side by side at one shared pixel scale.
+            float unitW = s1.rect.width + (s2 != null ? s2.rect.width : 0f);
+            float unitH = Mathf.Max(s1.rect.height, s2 != null ? s2.rect.height : 0f);
+            float w = 54f * _scale * item.SizeMul * growth * (s2 != null ? 1.7f : 1f);
+            float px2unit = w / unitW;
+            float hgt = unitH * px2unit;
 
             float laneTop = area.y + 64f * _scale;
             float laneBottom = sandTop - 40f * _scale - hgt;
@@ -920,8 +926,51 @@ namespace CoralCascade
             bool movingRight = ((int)(k / span) & 1) == 0;
             float bob = Mathf.Sin(t * 1.9f + h) * 6f * _scale;
 
-            DrawSpriteGUI(new Rect(area.x + 20f * _scale + px, laneY + bob, w, hgt),
-                          s, !movingRight, item.Tint); // pack fish face right natively
+            float x = area.x + 20f * _scale + px;
+            float y = laneY + bob;
+            if (s2 == null)
+            {
+                DrawSpriteGUI(new Rect(x, y, w, hgt), s1, !movingRight, item.Tint);
+                return; // pack fish face right natively
+            }
+
+            float w1 = s1.rect.width * px2unit, h1 = s1.rect.height * px2unit;
+            float w2 = s2.rect.width * px2unit, h2 = s2.rect.height * px2unit;
+            float y1 = y + (hgt - h1) * 0.5f, y2 = y + (hgt - h2) * 0.5f;
+            if (movingRight)
+            {
+                DrawSpriteGUI(new Rect(x, y1, w1, h1), s1, false, item.Tint);
+                DrawSpriteGUI(new Rect(x + w1, y2, w2, h2), s2, false, item.Tint);
+            }
+            else
+            {
+                // Mirrored: halves swap order AND each half flips.
+                DrawSpriteGUI(new Rect(x, y2, w2, h2), s2, true, item.Tint);
+                DrawSpriteGUI(new Rect(x + w2, y1, w1, h1), s1, true, item.Tint);
+            }
+        }
+
+        /// <summary>Shop/list icon for a reef item — handles two-tile sprites too.</summary>
+        private void DrawReefItemIcon(Rect outer, ReefItem item)
+        {
+            var s1 = BubbleArt.Get(item.SpriteName);
+            if (s1 == null) return;
+            var s2 = string.IsNullOrEmpty(item.SpriteName2) ? null : BubbleArt.Get(item.SpriteName2);
+            if (s2 == null)
+            {
+                DrawSpriteGUI(FitRect(outer, s1), s1, false, item.Tint);
+                return;
+            }
+            float unitW = s1.rect.width + s2.rect.width;
+            float unitH = Mathf.Max(s1.rect.height, s2.rect.height);
+            float k = Mathf.Min(outer.width / unitW, outer.height / unitH);
+            float w1 = s1.rect.width * k, w2 = s2.rect.width * k;
+            float x = outer.x + (outer.width - (w1 + w2)) * 0.5f;
+            float cy = outer.y + outer.height * 0.5f;
+            DrawSpriteGUI(new Rect(x, cy - s1.rect.height * k * 0.5f, w1, s1.rect.height * k),
+                          s1, false, item.Tint);
+            DrawSpriteGUI(new Rect(x + w1, cy - s2.rect.height * k * 0.5f, w2, s2.rect.height * k),
+                          s2, false, item.Tint);
         }
 
         private void DrawShopPanel(Rect area)
@@ -938,9 +987,7 @@ namespace CoralCascade
                 GUILayout.BeginHorizontal(GUILayout.Height(46f * _scale));
                 var iconRect = GUILayoutUtility.GetRect(42f * _scale, 42f * _scale,
                                                         GUILayout.Width(42f * _scale));
-                var sprite = BubbleArt.Get(item.SpriteName);
-                if (sprite != null)
-                    DrawSpriteGUI(FitRect(iconRect, sprite), sprite, false, item.Tint);
+                DrawReefItemIcon(iconRect, item);
                 GUILayout.Space(8f * _scale);
                 GUILayout.BeginVertical();
                 GUILayout.Label(item.DisplayName, _barLabelStyle);

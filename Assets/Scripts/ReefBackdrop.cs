@@ -39,10 +39,12 @@ namespace CoralCascade
             "background_seaweed_e", "background_seaweed_g",
             "background_rock_a", "background_rock_b"
         };
+        // NOTE: fish_grey_long_a/b are the two HALVES of one long fish (each hugs a tile
+        // edge) — drawn alone they look cut off, so they're excluded here. The composed
+        // eel lives in the aquarium (GameFlow.DrawTankFish handles two-tile sprites).
         private static readonly string[] SwimmerNames =
         {
-            "fish_blue", "fish_orange", "fish_pink", "fish_green", "fish_red",
-            "fish_brown", "fish_grey_long_a", "fish_grey_long_b"
+            "fish_blue", "fish_orange", "fish_pink", "fish_green", "fish_red", "fish_brown"
         };
 
         private class Riser

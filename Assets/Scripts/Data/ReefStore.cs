@@ -13,6 +13,13 @@ namespace CoralCascade
         public string Id;
         public string DisplayName;
         public string SpriteName;   // BubbleArt.Get name (Kenney pack)
+        /// <summary>
+        /// Second half for two-tile sprites. The pack's long fish is SPLIT across two
+        /// textures (long_a = left half hugging its right edge, long_b = right half
+        /// hugging its left edge) — drawn alone it looks cut off; renderers must place
+        /// the halves side by side.
+        /// </summary>
+        public string SpriteName2;
         public int Price;           // pearls
         public ReefItemKind Kind;
         public Color Tint = Color.white;
@@ -51,7 +58,8 @@ namespace CoralCascade
             new ReefItem("fish_green",  "Green Chromis", "fish_green",       30, ReefItemKind.Fish),
             new ReefItem("fish_pink",   "Pink Damsel",   "fish_pink",        40, ReefItemKind.Fish, 0.85f),
             new ReefItem("fish_red",    "Red Snapper",   "fish_red",         40, ReefItemKind.Fish, 1.1f),
-            new ReefItem("eel",         "Moray Eel",     "fish_grey_long_a", 60, ReefItemKind.Fish, 1.2f),
+            new ReefItem("eel",         "Moray Eel",     "fish_grey_long_a", 60, ReefItemKind.Fish, 1.2f)
+                { SpriteName2 = "fish_grey_long_b" },
             new ReefItem("puffer",      "Pufferfish",    "fish_brown",       80, ReefItemKind.Fish, 1.15f),
             new ReefItem("grass",       "Sea Grass",     "seaweed_grass_a",  10, ReefItemKind.Plant),
             new ReefItem("rock",        "Reef Rock",     "rock_a",           10, ReefItemKind.Plant, 0.8f),
@@ -67,8 +75,8 @@ namespace CoralCascade
             new ReefItem("rare_gold_puffer", "Golden Puffer", "fish_brown", 0, ReefItemKind.Fish, 1.25f)
             { Tint = new Color(1f, 0.84f, 0.35f) };
         public static readonly ReefItem PearlEel =
-            new ReefItem("rare_pearl_eel", "Pearl Eel", "fish_grey_long_b", 0, ReefItemKind.Fish, 1.3f)
-            { Tint = new Color(0.95f, 0.97f, 1f) };
+            new ReefItem("rare_pearl_eel", "Pearl Eel", "fish_grey_long_a", 0, ReefItemKind.Fish, 1.3f)
+            { SpriteName2 = "fish_grey_long_b", Tint = new Color(0.95f, 0.97f, 1f) };
 
         /// <summary>Golden Puffer: 3★ on EVERY Tutorial Reef board.</summary>
         public static bool GoldenPufferUnlocked()
