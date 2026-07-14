@@ -38,11 +38,31 @@ namespace CoralCascade
             return list;
         }
 
+        /// <summary>
+        /// The Daily Reef (roadmap step 4): one fresh level per calendar day, seeded by the
+        /// date — every player (and every retry) gets the identical board that day. The
+        /// difficulty band is also date-picked (Reef 7–24 equivalent), so days vary.
+        /// Best score / stars key off the level NAME, which embeds the date — per-day
+        /// records fall out of the existing persistence for free.
+        /// </summary>
+        public static BoardLayoutData Daily(DateTime date)
+        {
+            int dateKey = date.Year * 10000 + date.Month * 100 + date.Day;
+            var pick = new Random(dateKey * 131 + 17);
+            int t = 6 + pick.Next(18);
+            return Generate($"Daily {date:yyyy-MM-dd}", dateKey ^ 0x5EEF, t);
+        }
+
         private static BoardLayoutData Generate(int levelNumber)
         {
-            // Deterministic: the level number IS the seed. Never use UnityEngine.Random here.
-            var rng = new Random(levelNumber * 7919 + 12345);
-            int t = levelNumber - 1; // 0-based ramp position across the Adventure
+            // Deterministic: the level number IS the seed. Never use UnityEngine.Random
+            // here. Seed/t formulas are FROZEN — changing them reshuffles every Reef.
+            return Generate($"Reef {levelNumber}", levelNumber * 7919 + 12345, levelNumber - 1);
+        }
+
+        private static BoardLayoutData Generate(string name, int seed, int t)
+        {
+            var rng = new Random(seed);
 
             int columns = Math.Min(13, 9 + t / 7);
             int rows = Math.Min(11, 6 + t / 5);
@@ -113,7 +133,7 @@ namespace CoralCascade
             int pressureEvery = t >= 4 ? Math.Max(5, 8 - t / 8) : 0;
             int dangerRow = t >= 4 ? Math.Min(14, rows + Math.Max(3, 6 - t / 10)) : 0;
 
-            return new BoardLayoutData($"Reef {levelNumber}", columns, cellRows, shots,
+            return new BoardLayoutData(name, columns, cellRows, shots,
                                        pressureEvery, dangerRow);
         }
 

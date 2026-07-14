@@ -62,6 +62,10 @@ namespace CoralCascade
         private Vector2 _shopScroll;
         private bool _goldenUnlocked, _pearlEelUnlocked; // refreshed on tab entry
 
+        // Daily Reef (roadmap step 4) — regenerated when the local calendar day changes.
+        private BoardLayoutData _dailyLayout;
+        private System.DateTime _dailyDate;
+
         // Pointer occlusion for the launcher (GUI coords, top-left origin).
         private Rect _topBarRect;
         private bool _modalOpen;
@@ -588,12 +592,13 @@ namespace CoralCascade
 
             // Scrollable path (or the aquarium) below the tabs.
             float mapTop = headerH + tabH + 20f * _scale;
-            var mapRect = new Rect(0, mapTop, Screen.width, Screen.height - mapTop);
             if (_reefTab)
             {
-                DrawReefTank(mapRect);
+                DrawReefTank(new Rect(0, mapTop, Screen.width, Screen.height - mapTop));
                 return;
             }
+            mapTop += DrawDailyBanner(mapTop);
+            var mapRect = new Rect(0, mapTop, Screen.width, Screen.height - mapTop);
             float spacing = 112f * _scale;
             float nodeSize = 68f * _scale;
             float basePad = 70f * _scale;
@@ -689,6 +694,49 @@ namespace CoralCascade
             GUI.enabled = true;
             GUI.backgroundColor = oldBg;
             GUI.EndGroup();
+        }
+
+        // ---- Daily Reef (roadmap step 4) ------------------------------------------------------
+
+        private void EnsureDaily()
+        {
+            var today = System.DateTime.Now.Date; // LOCAL date: resets at the player's midnight
+            if (_dailyLayout == null || _dailyDate != today)
+            {
+                _dailyDate = today;
+                _dailyLayout = LevelCatalog.Daily(today);
+            }
+        }
+
+        /// <summary>
+        /// The Daily Reef banner between the tabs and the map path. Returns the height it
+        /// consumed. Uncleared today = sunshine (calls attention); cleared = quiet tab
+        /// style with today's best + star pips.
+        /// </summary>
+        private float DrawDailyBanner(float y)
+        {
+            EnsureDaily();
+            float h = 50f * _scale;
+            float w = Mathf.Min(430f * _scale, Screen.width - 24f * _scale);
+            var rect = new Rect((Screen.width - w) * 0.5f, y, w, h);
+
+            int best = HighScores.Get(_dailyLayout.Name);
+            bool cleared = best > 0;
+            string label = cleared
+                ? $"DAILY REEF  ·  cleared!  Best {best}"
+                : $"DAILY REEF  ·  {_dailyDate:MMM d}  ·  a fresh challenge!";
+
+            bool swiping = _dragDistance > 15f; // same guard as map nodes: swipes never tap
+            GUI.enabled = !swiping;
+            bool tapped = GUI.Button(rect, label, cleared ? _tabStyle : _tabActiveStyle);
+            GUI.enabled = true;
+            if (cleared)
+                DrawStars(new Rect(rect.xMax - 76f * _scale, rect.yMax - 16f * _scale,
+                                   64f * _scale, 12f * _scale),
+                          Stars.Get(_dailyLayout.Name), 9f * _scale);
+            if (tapped)
+                StartLevel(Active, _dailyLayout); // not in a section: no unlock chain, no Next
+            return h + 10f * _scale;
         }
 
         // ---- My Reef aquarium (roadmap step 5, purely cosmetic — see ReefStore) -------------

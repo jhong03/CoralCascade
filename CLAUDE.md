@@ -7,9 +7,9 @@ Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `Coral
 
 **Where we are:** Roadmap steps 1 (stars), 2 (stone/ice obstacles), and 3 (descending
 pressure) DONE — step 3 finished 2026-07-14, awaiting user play-test (RisingTide, Intro 8,
-is the acceptance board). **Step 5 (My Reef aquarium MVP) BUILT 2026-07-14 — user chose to
-take it BEFORE step 4; Daily Reef is now the next step.** Session mode: implement ONE step,
-stop, summarize, wait for go. 2026-07-14 also:
+is the acceptance board). **Steps 4 (Daily Reef) and 5 (My Reef aquarium) BOTH BUILT
+2026-07-14 — the numbered roadmap is COMPLETE; next work comes from the backlog below,
+user-picked.** Session mode: implement ONE step, stop, summarize, wait for go. 2026-07-14 also:
 art direction agreed + **gameplay bubble art integrated** (see "Art direction" below —
 `BubbleArt.cs`, Kenney Fish Pack under `Assets/Resources/Art/Double`) + **sunlit UI/backdrop
 pass** (user: game felt "dark and depressing"; all 4 proposed fixes approved & built —
@@ -118,8 +118,16 @@ Build order (mechanics only; game design/art/effects pass comes later, user-led)
    anchoring machine-checked). Adventure: pressure from Reef 5 (t≥4), every
    max(5, 8−t/8) shots, dangerRow min(14, rows+max(3, 6−t/10)) — fields consume NO rng
    draws, so all existing Reef layouts are byte-identical.
-4. **Daily Reef** — daily challenge level seeded by date (deterministic generator makes this
-   trivial); own map entry/tab or button; separate best-score record per day key.
+4. **Daily Reef** — ✅ DONE 2026-07-14 (built AFTER step 5 by user's choice).
+   `LevelCatalog.Daily(date)`: seed = dateKey^0x5EEF, difficulty t date-picked from 6–23
+   (Reef 7–24 band, so days vary incl. obstacles+pressure); `Generate` refactored to
+   `(name, seed, t)` — Reef wrapper passes the FROZEN original formulas, layouts
+   byte-identical. Level name embeds the date ("Daily 2026-07-14") so per-day best/stars
+   fall out of name-keyed persistence for free (pearls' first-clear bonus = daily income,
+   intended). GameFlow: banner between tabs and map path (`DrawDailyBanner`/`EnsureDaily`,
+   LOCAL date, regenerates at midnight rollover) — sunshine when unplayed, quiet + best +
+   star pips when cleared. Daily is NOT in a section: CurrentLevelIndex()=-1 ⇒ no unlock
+   chain, no Next Level button — by design.
 5. **My Reef aquarium MVP** — ✅ DONE 2026-07-14 (user pulled it AHEAD of step 4).
    Spec section below is the design record; implementation: `Data/ReefStore.cs` (catalog
    13 items + rares + persistence + growth) + `Pearls` in `Data/Scoring.cs` + GameFlow
