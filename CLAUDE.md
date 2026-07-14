@@ -190,7 +190,9 @@ deliberately dropped with the critters — revisit if it becomes a complaint (op
 reuse them for balls); several pack canvases auto-sliced into 2-3 sub-sprites (seaweed =
 separate strands), so `BubbleArt.Load` picks the LARGEST slice, and normalizes by the
 LONG side (width-normalizing made 30×98 kelp into 3.3-unit pillars — the user's "moving
-cuboids"). Sprites are runtime-normalized to 1 world unit
+cuboids"). ALSO: `fish_grey_long_a/b` are the two HALVES of one long fish (each hugs a
+tile edge) — never draw either alone; `ReefItem.SpriteName2` + GameFlow's two-tile
+rendering compose them (the eel), and they're excluded from ReefBackdrop's swimmer pool. Sprites are runtime-normalized to 1 world unit
 (`Sprite.Create` with PPU = rect width) so import PPU never matters; collider contract
 (local radius 0.5) unchanged. Primitive-circle fallback auto-engages if the art folder is
 missing — the game never requires imported assets. Apply is idempotent and never touches
