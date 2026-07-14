@@ -936,17 +936,25 @@ namespace CoralCascade
 
             float w1 = s1.rect.width * px2unit, h1 = s1.rect.height * px2unit;
             float w2 = s2.rect.width * px2unit, h2 = s2.rect.height * px2unit;
-            float y1 = y + (hgt - h1) * 0.5f, y2 = y + (hgt - h2) * 0.5f;
+            // Vertical alignment must follow TEXTURE space, not centering: the halves'
+            // artwork heights differ but they share a top edge in their source tiles —
+            // centering stepped the seam by ~2px (visible split, user-reported).
+            float texTopMax = Mathf.Max(s1.rect.yMax, s2.rect.yMax);
+            float y1 = y + (texTopMax - s1.rect.yMax) * px2unit;
+            float y2 = y + (texTopMax - s2.rect.yMax) * px2unit;
+            // Overlap the joint by ~1.5 source px of solid body so filtering/sub-pixel
+            // placement can never open a gap between the quads.
+            float overlap = 1.5f * px2unit;
             if (movingRight)
             {
                 DrawSpriteGUI(new Rect(x, y1, w1, h1), s1, false, item.Tint);
-                DrawSpriteGUI(new Rect(x + w1, y2, w2, h2), s2, false, item.Tint);
+                DrawSpriteGUI(new Rect(x + w1 - overlap, y2, w2, h2), s2, false, item.Tint);
             }
             else
             {
                 // Mirrored: halves swap order AND each half flips.
                 DrawSpriteGUI(new Rect(x, y2, w2, h2), s2, true, item.Tint);
-                DrawSpriteGUI(new Rect(x + w2, y1, w1, h1), s1, true, item.Tint);
+                DrawSpriteGUI(new Rect(x + w2 - overlap, y1, w1, h1), s1, true, item.Tint);
             }
         }
 
@@ -966,11 +974,13 @@ namespace CoralCascade
             float k = Mathf.Min(outer.width / unitW, outer.height / unitH);
             float w1 = s1.rect.width * k, w2 = s2.rect.width * k;
             float x = outer.x + (outer.width - (w1 + w2)) * 0.5f;
-            float cy = outer.y + outer.height * 0.5f;
-            DrawSpriteGUI(new Rect(x, cy - s1.rect.height * k * 0.5f, w1, s1.rect.height * k),
-                          s1, false, item.Tint);
-            DrawSpriteGUI(new Rect(x + w1, cy - s2.rect.height * k * 0.5f, w2, s2.rect.height * k),
-                          s2, false, item.Tint);
+            // Same seam rules as DrawTankFish: texture-top alignment + slight overlap.
+            float texTopMax = Mathf.Max(s1.rect.yMax, s2.rect.yMax);
+            float yTop = outer.y + (outer.height - unitH * k) * 0.5f;
+            DrawSpriteGUI(new Rect(x, yTop + (texTopMax - s1.rect.yMax) * k,
+                                   w1, s1.rect.height * k), s1, false, item.Tint);
+            DrawSpriteGUI(new Rect(x + w1 - 1.5f * k, yTop + (texTopMax - s2.rect.yMax) * k,
+                                   w2, s2.rect.height * k), s2, false, item.Tint);
         }
 
         private void DrawShopPanel(Rect area)
