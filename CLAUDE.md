@@ -284,9 +284,14 @@ timers, NO fish death/decay, NO social/gifting. **Purely cosmetic forever** (use
 - **Persistence**: `CoralCascade.Reef.<ItemId>` = owned count; per-fish buy timestamps
   (CSV under `CoralCascade.Reef.T.<ItemId>`) drive **growth**: scale lerps 0.55 → 1.0
   over 3 real days (UtcNow) — bought as a baby, grows across sessions, never shrinks.
-- **Placement v1**: deterministic auto-layout seeded from owned counts (no drag editing —
-  that's a later upgrade). Enter tab → build from persistence; leave → teardown
-  (SetActive(false)+Destroy convention). Launcher already inert outside gameplay.
+- **Placement (UPGRADED 2026-07-14, user request)**: decor (plants/rocks/vents) is
+  DRAG-TO-PLACE along the sand — normalized x per instance in
+  `CoralCascade.Reef.X.<Id>` CSV (`ReefStore.GetX/SetX`, invariant culture; defaults
+  well-spread for pre-feature purchases); grab via last frame's `_decorHits` rects,
+  held piece glows, release persists; shop-open drags scroll the shop instead. Fish
+  are never placeable (they swim). **Selling (same day)**: `ReefStore.Sell` = half
+  price back, removes the LAST instance + trims its timestamp/position CSVs; Sell
+  button in every shop row.
 
 ## Architecture invariants (do not break)
 
