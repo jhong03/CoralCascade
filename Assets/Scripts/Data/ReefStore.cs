@@ -116,6 +116,78 @@ namespace CoralCascade
             return true;
         }
 
+        /// <summary>Selling returns half the purchase price (rounded down, min 1).</summary>
+        public static int SellValue(ReefItem item) => Mathf.Max(1, item.Price / 2);
+
+        /// <summary>Sells the LAST owned instance of an item back for pearls.</summary>
+        public static bool Sell(ReefItem item)
+        {
+            if (item == null) return false;
+            int n = Count(item.Id);
+            if (n <= 0) return false;
+            PlayerPrefs.SetInt(CountKey(item.Id), n - 1);
+            TrimLastCsvEntry(TimesKey(item.Id));
+            TrimLastCsvEntry(XKey(item.Id));
+            Pearls.Add(SellValue(item));
+            PlayerPrefs.Save();
+            return true;
+        }
+
+        private static void TrimLastCsvEntry(string key)
+        {
+            string csv = PlayerPrefs.GetString(key, "");
+            if (string.IsNullOrEmpty(csv)) return;
+            int i = csv.LastIndexOf(',');
+            PlayerPrefs.SetString(key, i < 0 ? "" : csv.Substring(0, i));
+        }
+
+        // ---- Decor placement (normalized 0..1 x along the sand, per instance) -----------------
+
+        private static string XKey(string id) => "CoralCascade.Reef.X." + id;
+
+        /// <summary>
+        /// Stored placement for the k-th instance, or a deterministic well-spread default
+        /// (also covers items bought before placement existed).
+        /// </summary>
+        public static float GetX(string id, int instance)
+        {
+            string csv = PlayerPrefs.GetString(XKey(id), "");
+            if (!string.IsNullOrEmpty(csv))
+            {
+                string[] parts = csv.Split(',');
+                float v;
+                if (instance < parts.Length &&
+                    float.TryParse(parts[instance], System.Globalization.NumberStyles.Float,
+                                   System.Globalization.CultureInfo.InvariantCulture, out v))
+                    return Mathf.Clamp01(v);
+            }
+            return DefaultX(id, instance);
+        }
+
+        public static void SetX(string id, int instance, float x01)
+        {
+            string csv = PlayerPrefs.GetString(XKey(id), "");
+            var parts = new List<string>(string.IsNullOrEmpty(csv) ? new string[0] : csv.Split(','));
+            while (parts.Count <= instance)
+                parts.Add(DefaultX(id, parts.Count).ToString("0.###",
+                          System.Globalization.CultureInfo.InvariantCulture));
+            parts[instance] = Mathf.Clamp01(x01).ToString("0.###",
+                              System.Globalization.CultureInfo.InvariantCulture);
+            PlayerPrefs.SetString(XKey(id), string.Join(",", parts.ToArray()));
+            PlayerPrefs.Save();
+        }
+
+        private static float DefaultX(string id, int instance)
+        {
+            unchecked
+            {
+                int h = 23;
+                foreach (char c in id) h = h * 31 + c;
+                float v = Mathf.Abs(h % 997) / 997f + instance * 0.37f;
+                return v - Mathf.Floor(v);
+            }
+        }
+
         /// <summary>
         /// Growth scale (BabyScale → 1) for the k-th owned instance of an item. Instances
         /// without a recorded timestamp (defensive) count as fully grown.

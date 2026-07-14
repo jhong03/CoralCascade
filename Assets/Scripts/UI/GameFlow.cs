@@ -74,6 +74,13 @@ namespace CoralCascade
         private BoardLayoutData _dailyLayout;
         private System.DateTime _dailyDate;
 
+        // Decor placement: drag corals/rocks/vents along the sand (persisted per instance).
+        private struct DecorHit { public Rect R; public string Id; public int Inst; }
+        private readonly List<DecorHit> _decorHits = new List<DecorHit>();
+        private string _placingId;   // null = not dragging decor
+        private int _placingInst;
+        private float _placingX01;
+
         // Pointer occlusion for the launcher (GUI coords, top-left origin).
         private Rect _topBarRect;
         private bool _modalOpen;
@@ -161,6 +168,7 @@ namespace CoralCascade
             {
                 _endSeen = false;
                 HandleMapDrag();
+                HandleDecorPlacement();
                 return;
             }
             if (_splashUntil > 0f && PointerInput.PressedThisFrame)
@@ -206,6 +214,46 @@ namespace CoralCascade
             }
         }
 
+        /// <summary>
+        /// Drag-to-place for aquarium decor (plants/rocks/vents — fish swim freely). Press
+        /// on a piece grabs it, dragging slides it along the sand, release persists. Uses
+        /// the hit rects recorded by the previous frame's draw.
+        /// </summary>
+        private void HandleDecorPlacement()
+        {
+            if (_menuPage != MenuPage.Reef || _shopOpen)
+            {
+                _placingId = null;
+                return;
+            }
+
+            Vector2 p = PointerInput.ScreenPosition;
+            var gui = new Vector2(p.x, Screen.height - p.y); // GUI space is top-left origin
+
+            if (PointerInput.PressedThisFrame)
+            {
+                for (int i = _decorHits.Count - 1; i >= 0; i--) // topmost = drawn last
+                {
+                    if (!_decorHits[i].R.Contains(gui)) continue;
+                    _placingId = _decorHits[i].Id;
+                    _placingInst = _decorHits[i].Inst;
+                    _placingX01 = ReefStore.GetX(_placingId, _placingInst);
+                    break;
+                }
+            }
+            else if (_placingId != null && PointerInput.IsPressed)
+            {
+                // Same margins as the tank's draw-time Lerp — keep the two in sync.
+                float left = 30f * _scale, right = Screen.width - 30f * _scale;
+                _placingX01 = Mathf.Clamp01((gui.x - left) / Mathf.Max(1f, right - left));
+            }
+            else if (_placingId != null)
+            {
+                ReefStore.SetX(_placingId, _placingInst, _placingX01); // release → persist
+                _placingId = null;
+            }
+        }
+
         /// <summary>Touch-drag scrolling for the map (IMGUI has no native swipe scroll).</summary>
         private void HandleMapDrag()
         {
@@ -219,7 +267,9 @@ namespace CoralCascade
                 float y = PointerInput.ScreenPosition.y;
                 float dy = y - _lastDragY; // finger up → reveal higher levels
                 if (_menuPage == MenuPage.Reef)
-                    _shopScroll.y += dy;   // swipe scrolls the shop list instead of the map
+                {
+                    if (_shopOpen) _shopScroll.y += dy; // shop closed → drags place decor instead
+                }
                 else if (_menuPage == MenuPage.SectionMap && _sections != null && Active.MapOffset >= 0f)
                 {
                     // Floor at 0: MapOffset < 0 is the "auto-center the frontier" SENTINEL —
@@ -819,8 +869,9 @@ namespace CoralCascade
                     DrawSpriteGUI(new Rect(area.x + x, area.yMax - tile, tile, tile), sand, false, Color.white);
 
             int owned = 0;
+            _decorHits.Clear(); // rebuilt every draw; placement input reads last frame's
 
-            // Plants and vents live on the sand; fish swim the open water above it.
+            // Plants and vents live on the sand (drag to place); fish swim freely above.
             foreach (var item in ReefStore.Catalog)
             {
                 int n = ReefStore.Count(item.Id);
@@ -828,7 +879,9 @@ namespace CoralCascade
                 for (int k = 0; k < n; k++)
                 {
                     int h = ReefHash(item.Id, k);
-                    float fx = area.x + 30f * _scale + Frac(h * 0.618034f) * (area.width - 90f * _scale);
+                    bool held = item.Id == _placingId && k == _placingInst;
+                    float x01 = held ? _placingX01 : ReefStore.GetX(item.Id, k);
+                    float fx = Mathf.Lerp(area.x + 30f * _scale, area.xMax - 30f * _scale, x01);
                     switch (item.Kind)
                     {
                         case ReefItemKind.Plant:
@@ -838,14 +891,19 @@ namespace CoralCascade
                             float w = 58f * _scale * item.SizeMul;
                             float hgt = w * (s.rect.height / s.rect.width);
                             float sway = Mathf.Sin(t * 0.9f + h) * 3f * _scale;
-                            DrawSpriteGUI(new Rect(fx + sway, sandTop - hgt + 6f * _scale, w, hgt),
-                                          s, (h & 2) == 0, item.Tint);
+                            var rect = new Rect(fx + sway - w * 0.5f, sandTop - hgt + 6f * _scale, w, hgt);
+                            if (held) DrawHeldGlow(rect);
+                            DrawSpriteGUI(rect, s, (h & 2) == 0, item.Tint);
+                            _decorHits.Add(new DecorHit { R = rect, Id = item.Id, Inst = k });
                             break;
                         }
                         case ReefItemKind.Vent:
                         {
                             var ring = BubbleArt.Get("bubble_c");
                             if (ring == null) break;
+                            var baseRect = new Rect(fx - 22f * _scale, sandTop - 34f * _scale,
+                                                    44f * _scale, 44f * _scale);
+                            if (held) DrawHeldGlow(baseRect);
                             for (int j = 0; j < 3; j++)
                             {
                                 float prog = Frac(t * 0.16f + j / 3f + Frac(h * 0.377f));
@@ -854,6 +912,7 @@ namespace CoralCascade
                                 DrawSpriteGUI(new Rect(fx + Mathf.Sin(t + j + h) * 5f * _scale, y, size, size),
                                               ring, false, new Color(1f, 1f, 1f, 0.7f * (1f - prog)));
                             }
+                            _decorHits.Add(new DecorHit { R = baseRect, Id = item.Id, Inst = k });
                             break;
                         }
                         case ReefItemKind.Fish:
@@ -896,9 +955,25 @@ namespace CoralCascade
                       _pearlEelUnlocked ? "Pearl Eel — UNLOCKED!"
                                         : "Pearl Eel — 3-star any 10 Adventure reefs",
                       _shopSmallStyle);
+            if (owned > 0)
+                GUI.Label(new Rect(area.x + 12f * _scale, area.yMax - 24f * _scale,
+                                   area.width - 24f * _scale, 22f * _scale),
+                          "Tip: drag corals, rocks and vents to arrange your reef",
+                          _shopSmallStyle);
 
             if (_shopOpen)
                 DrawShopPanel(area);
+        }
+
+        /// <summary>Soft ring under the decor piece currently being dragged.</summary>
+        private void DrawHeldGlow(Rect r)
+        {
+            var old = GUI.color;
+            GUI.color = new Color(1f, 0.95f, 0.6f, 0.35f);
+            float pad = 10f * _scale;
+            GUI.DrawTexture(new Rect(r.x - pad, r.y - pad, r.width + pad * 2f, r.height + pad * 2f),
+                            PrimitiveSprites.Circle().texture);
+            GUI.color = old;
         }
 
         private void DrawTankFish(Rect area, float sandTop, ReefItem item, int instance,
@@ -1004,9 +1079,14 @@ namespace CoralCascade
                 GUILayout.Label($"owned {ReefStore.Count(item.Id)}", _shopSmallStyle);
                 GUILayout.EndVertical();
                 GUILayout.FlexibleSpace();
+                GUI.enabled = ReefStore.Count(item.Id) > 0;
+                if (GUILayout.Button($"Sell {ReefStore.SellValue(item)}", _tabStyle,
+                                     GUILayout.Width(86f * _scale), GUILayout.Height(38f * _scale)))
+                    ReefStore.Sell(item);
+                GUILayout.Space(6f * _scale);
                 GUI.enabled = Pearls.Balance >= item.Price;
-                if (GUILayout.Button($"Buy  {item.Price}", _buttonStyle,
-                                     GUILayout.Width(104f * _scale), GUILayout.Height(38f * _scale)))
+                if (GUILayout.Button($"Buy {item.Price}", _buttonStyle,
+                                     GUILayout.Width(92f * _scale), GUILayout.Height(38f * _scale)))
                     ReefStore.Buy(item);
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
