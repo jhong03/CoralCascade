@@ -209,7 +209,12 @@ namespace CoralCascade
                 if (_reefTab)
                     _shopScroll.y += dy;   // swipe scrolls the shop list instead of the map
                 else if (_sections != null && Active.MapOffset >= 0f)
-                    Active.MapOffset += dy;
+                {
+                    // Floor at 0: MapOffset < 0 is the "auto-center the frontier" SENTINEL —
+                    // dragging past the bottom must never trip it (it read as an endless
+                    // scroll loop: hit level 1 → snap back to the frontier → repeat).
+                    Active.MapOffset = Mathf.Max(0f, Active.MapOffset + dy);
+                }
                 _dragDistance += Mathf.Abs(dy);
                 _lastDragY = y;
             }
@@ -598,9 +603,10 @@ namespace CoralCascade
             float maxOffset = Mathf.Max(0f, contentH - mapRect.height);
 
             // Mouse-wheel support for the editor; swiping is handled in HandleMapDrag.
+            // Same 0-floor as the drag path: never wheel into the auto-center sentinel.
             if (Event.current.type == EventType.ScrollWheel && section.MapOffset >= 0f)
             {
-                section.MapOffset += Event.current.delta.y * 24f * _scale;
+                section.MapOffset = Mathf.Max(0f, section.MapOffset + Event.current.delta.y * 24f * _scale);
                 Event.current.Use();
             }
 
