@@ -145,6 +145,14 @@ preserve fairness), endless mode (reuses pressure + generator), share card, anal
 Standing caution: the Phase 1 exit gate (human play-test of cascade FEEL) is still pending —
 feel tunables (ImpactThreshold, slow-mo, shot speed) may need revisiting before deep polish.
 
+**Menu restructure (2026-07-14, user request):** LevelSelect is now PAGED
+(`GameFlow.MenuPage`: Home / SectionMap / Reef) — Home = title + daily banner + big
+section cards (with cleared counts; the section to chase glows sunshine) + My Reef card;
+tapping a card opens that section's route page (Back button, title, winding path — map
+drag only works here) or the aquarium page. The 3-tab row is GONE. Back-from-level lands
+on the played section's ROUTE page (not Home). Rare-unlock refresh moved to the My Reef
+card click.
+
 **Balance pass 2026-07-14 (user: late reefs "impossible"; math agreed — Reef 30 needed a
 sustained 5.2 net bubbles/shot):** (A) shot budget = 0.5/bubble × (1 + 12%/color beyond 4)
 × (1 + 40% of tide influx/shot), cap 30→40; 5th/6th colors delayed to Reef 13/25; tide

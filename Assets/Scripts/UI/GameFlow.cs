@@ -18,6 +18,13 @@ namespace CoralCascade
         private enum FlowScreen { LevelSelect, Playing }
 
         /// <summary>
+        /// Pages within the LevelSelect screen (user request 2026-07-14: menu and level
+        /// routes must be SEPARATE pages): Home = big section cards + daily banner;
+        /// SectionMap = one section's winding route with a Back button; Reef = aquarium.
+        /// </summary>
+        private enum MenuPage { Home, SectionMap, Reef }
+
+        /// <summary>
         /// One tab of the level map with its own level list and its own progression chain.
         /// The Tutorial Reef (the 5 hand-authored intro boards) and the Adventure (the main
         /// game: generated levels) are entirely separate progressions.
@@ -56,8 +63,9 @@ namespace CoralCascade
         private float _splashUntil;  // start-of-level target splash (tap or first shot skips)
         private int _pearlsEarned;   // aquarium currency granted by this win
 
-        // My Reef aquarium tab (roadmap step 5) — purely cosmetic, see ReefStore.
-        private bool _reefTab;
+        private MenuPage _menuPage = MenuPage.Home;
+
+        // My Reef aquarium page (roadmap step 5) — purely cosmetic, see ReefStore.
         private bool _shopOpen;
         private Vector2 _shopScroll;
         private bool _goldenUnlocked, _pearlEelUnlocked; // refreshed on tab entry
@@ -92,7 +100,7 @@ namespace CoralCascade
         private Texture2D _mapGradientTex;
         private GUIStyle _titleStyle, _subtitleStyle, _buttonStyle, _barLabelStyle, _overlayTitleStyle;
         private GUIStyle _nodeStyle, _nodeBestStyle, _tabStyle, _tabActiveStyle, _panelStyle;
-        private GUIStyle _meterLabelStyle, _shopSmallStyle;
+        private GUIStyle _meterLabelStyle, _shopSmallStyle, _cardStyle, _cardActiveStyle;
         private float _scale;
         private bool _stylesReady;
 
@@ -210,9 +218,9 @@ namespace CoralCascade
             {
                 float y = PointerInput.ScreenPosition.y;
                 float dy = y - _lastDragY; // finger up → reveal higher levels
-                if (_reefTab)
+                if (_menuPage == MenuPage.Reef)
                     _shopScroll.y += dy;   // swipe scrolls the shop list instead of the map
-                else if (_sections != null && Active.MapOffset >= 0f)
+                else if (_menuPage == MenuPage.SectionMap && _sections != null && Active.MapOffset >= 0f)
                 {
                     // Floor at 0: MapOffset < 0 is the "auto-center the frontier" SENTINEL —
                     // dragging past the bottom must never trip it (it read as an endless
@@ -281,8 +289,8 @@ namespace CoralCascade
                 int played = System.Array.IndexOf(_sections, _playingSection);
                 if (played >= 0) _sectionIndex = played;
             }
-            Active.MapOffset = -1f; // re-center the map on the frontier
-            _reefTab = false;       // land on the played section's map, not the aquarium
+            Active.MapOffset = -1f;             // re-center the map on the frontier
+            _menuPage = MenuPage.SectionMap;    // back from a level lands on its route page
             _screen = FlowScreen.LevelSelect;
         }
 
@@ -413,6 +421,10 @@ namespace CoralCascade
             };
             _shopSmallStyle.normal.textColor = SoftTeal;
 
+            // Home-page section cards: two-line rich text ("<b>Title</b>\nprogress").
+            _cardStyle = new GUIStyle(_tabStyle) { fontSize = (int)(17 * _scale), richText = true };
+            _cardActiveStyle = new GUIStyle(_tabActiveStyle) { fontSize = (int)(17 * _scale), richText = true };
+
             // Light rounded panel for pause/win/lose (text on it is deep teal).
             _panelStyle = new GUIStyle(GUI.skin.box)
             {
@@ -539,65 +551,16 @@ namespace CoralCascade
                             ScaleMode.StretchToFill);
             DrawSunRays();
 
-            // Fixed header.
-            float headerH = 88f * _scale;
-            GUILayout.BeginArea(new Rect(0, 10f * _scale, Screen.width, headerH));
-            GUILayout.Label("CORAL CASCADE", _titleStyle);
-            GUILayout.Label("Swipe the reef path — tap a level to dive in", _subtitleStyle);
-            GUILayout.EndArea();
+            if (_menuPage == MenuPage.Home) { DrawHomePage(); return; }
+            if (_menuPage == MenuPage.Reef) { DrawReefPage(); return; }
 
-            // Pearl balance chip (top-right of the header).
-            float chipH = 30f * _scale;
-            var chipRect = new Rect(Screen.width - 128f * _scale, 12f * _scale, 118f * _scale, chipH);
-            GUI.DrawTexture(chipRect, PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.40f)));
-            float pearlIcon = chipH - 10f * _scale;
-            var pipOld = GUI.color;
-            GUI.color = new Color(0.98f, 0.93f, 0.82f);
-            GUI.DrawTexture(new Rect(chipRect.x + 7f * _scale, chipRect.y + 5f * _scale, pearlIcon, pearlIcon),
-                            PrimitiveSprites.GlossyOrb().texture);
-            GUI.color = pipOld;
-            GUI.Label(new Rect(chipRect.x + pearlIcon + 12f * _scale, chipRect.y,
-                               chipRect.width - pearlIcon - 14f * _scale, chipRect.height),
-                      Pearls.Balance.ToString(), _barLabelStyle);
-
-            // Tabs: Tutorial Reef / Adventure (separate progressions) / My Reef (aquarium).
-            float tabH = 44f * _scale;
-            float gap = 6f * _scale;
-            int tabCount = _sections.Length + 1;
-            float tabW = Mathf.Min(160f * _scale,
-                                   (Screen.width - 24f * _scale - gap * (tabCount - 1)) / tabCount);
-            float tabX0 = (Screen.width - (tabW * tabCount + gap * (tabCount - 1))) * 0.5f;
-            for (int s = 0; s < tabCount; s++)
-            {
-                var tabRect = new Rect(tabX0 + s * (tabW + gap), headerH + 12f * _scale, tabW, tabH);
-                bool isReefTab = s == tabCount - 1;
-                bool selected = _reefTab ? isReefTab : (!isReefTab && s == _sectionIndex);
-                string label = isReefTab ? "My Reef" : _sections[s].Title;
-                if (GUI.Button(tabRect, label, selected ? _tabActiveStyle : _tabStyle))
-                {
-                    if (isReefTab)
-                    {
-                        _reefTab = true;
-                        _shopOpen = false;
-                        _goldenUnlocked = ReefStore.GoldenPufferUnlocked();
-                        _pearlEelUnlocked = ReefStore.PearlEelUnlocked();
-                    }
-                    else
-                    {
-                        _reefTab = false;
-                        _sectionIndex = s;
-                    }
-                }
-            }
-
-            // Scrollable path (or the aquarium) below the tabs.
-            float mapTop = headerH + tabH + 20f * _scale;
-            if (_reefTab)
-            {
-                DrawReefTank(new Rect(0, mapTop, Screen.width, Screen.height - mapTop));
+            // ---- Section route page: Back + section title, then the winding path ----
+            if (DrawBackButton())
                 return;
-            }
-            mapTop += DrawDailyBanner(mapTop);
+            GUI.Label(new Rect(0, 12f * _scale, Screen.width, 40f * _scale), Active.Title, _titleStyle);
+            DrawPearlChip();
+
+            float mapTop = 68f * _scale;
             var mapRect = new Rect(0, mapTop, Screen.width, Screen.height - mapTop);
             float spacing = 112f * _scale;
             float nodeSize = 68f * _scale;
@@ -694,6 +657,103 @@ namespace CoralCascade
             GUI.enabled = true;
             GUI.backgroundColor = oldBg;
             GUI.EndGroup();
+        }
+
+        // ---- Menu pages (home / section route / reef) ----------------------------------------
+
+        /// <summary>The main menu: title, daily banner, then one big card per destination.</summary>
+        private void DrawHomePage()
+        {
+            GUILayout.BeginArea(new Rect(0, 24f * _scale, Screen.width, 92f * _scale));
+            GUILayout.Label("CORAL CASCADE", _titleStyle);
+            GUILayout.Label("Choose your waters", _subtitleStyle);
+            GUILayout.EndArea();
+            DrawPearlChip();
+
+            float y = 128f * _scale;
+            y += DrawDailyBanner(y) + 6f * _scale;
+
+            // The section whose frontier the player should chase glows sunshine.
+            bool introDone = Progress.HighestUnlocked(_sections[0].Key) > _sections[0].Levels.Count;
+            for (int s = 0; s < _sections.Length; s++)
+            {
+                bool highlight = (s == 0) != introDone; // tutorial until done, then adventure
+                if (DrawMenuCard(ref y, _sections[s].Title,
+                                 $"{ClearedCount(_sections[s])}/{_sections[s].Levels.Count} cleared",
+                                 highlight))
+                {
+                    _sectionIndex = s;
+                    _sections[s].MapOffset = -1f; // open centered on the frontier
+                    _menuPage = MenuPage.SectionMap;
+                }
+            }
+            if (DrawMenuCard(ref y, "My Reef", "your aquarium — spend pearls, watch it grow", false))
+            {
+                _menuPage = MenuPage.Reef;
+                _shopOpen = false;
+                _goldenUnlocked = ReefStore.GoldenPufferUnlocked();
+                _pearlEelUnlocked = ReefStore.PearlEelUnlocked();
+            }
+        }
+
+        private void DrawReefPage()
+        {
+            if (DrawBackButton())
+                return;
+            GUI.Label(new Rect(0, 12f * _scale, Screen.width, 40f * _scale), "My Reef", _titleStyle);
+            DrawPearlChip();
+            float top = 68f * _scale;
+            DrawReefTank(new Rect(0, top, Screen.width, Screen.height - top));
+        }
+
+        /// <summary>Top-left Back button shared by the sub-pages. True if it navigated.</summary>
+        private bool DrawBackButton()
+        {
+            if (GUI.Button(new Rect(10f * _scale, 12f * _scale, 92f * _scale, 40f * _scale),
+                           "< Back", _tabStyle))
+            {
+                _menuPage = MenuPage.Home;
+                return true;
+            }
+            return false;
+        }
+
+        private void DrawPearlChip()
+        {
+            float chipH = 30f * _scale;
+            var chipRect = new Rect(Screen.width - 128f * _scale, 12f * _scale, 118f * _scale, chipH);
+            GUI.DrawTexture(chipRect, PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.40f)));
+            float pearlIcon = chipH - 10f * _scale;
+            var old = GUI.color;
+            GUI.color = new Color(0.98f, 0.93f, 0.82f);
+            GUI.DrawTexture(new Rect(chipRect.x + 7f * _scale, chipRect.y + 5f * _scale, pearlIcon, pearlIcon),
+                            PrimitiveSprites.GlossyOrb().texture);
+            GUI.color = old;
+            GUI.Label(new Rect(chipRect.x + pearlIcon + 12f * _scale, chipRect.y,
+                               chipRect.width - pearlIcon - 14f * _scale, chipRect.height),
+                      Pearls.Balance.ToString(), _barLabelStyle);
+        }
+
+        private bool DrawMenuCard(ref float y, string title, string sub, bool highlight)
+        {
+            float w = Mathf.Min(430f * _scale, Screen.width - 24f * _scale);
+            float h = 72f * _scale;
+            var rect = new Rect((Screen.width - w) * 0.5f, y, w, h);
+            y += h + 12f * _scale;
+            bool swiping = _dragDistance > 15f; // same guard as everywhere: swipes never tap
+            GUI.enabled = !swiping;
+            bool hit = GUI.Button(rect, $"<b>{title}</b>\n{sub}",
+                                  highlight ? _cardActiveStyle : _cardStyle);
+            GUI.enabled = true;
+            return hit;
+        }
+
+        private int ClearedCount(Section section)
+        {
+            int n = 0;
+            foreach (var level in section.Levels)
+                if (HighScores.Get(level.Name) > 0) n++;
+            return n;
         }
 
         // ---- Daily Reef (roadmap step 4) ------------------------------------------------------
