@@ -17,10 +17,10 @@ sunlit color flip, `ReefBackdrop.cs` living decor, bright IMGUI skin, lagoon map
 All compile-verified (25 files).
 **Next: roadmap step 3 — descending pressure** (board pushes down every N shots, lose when
 bubbles cross a danger line; replaces the placeholder lose rule), then step 4 Daily Reef.
-**Nothing from 2026-07-13 or 07-14 is checked into Unity Version Control yet** (game flow,
-color queue, difficulty pass, map/catalog/sections, scoring, stars, obstacles, art +
-BubbleArt integration, this file) — check everything in at next session start. Art still
-needs a HUMAN look in the editor (critter sizes/tints are eyeballed tunables in BubbleArt).
+**Version control moved to GitHub 2026-07-14:** everything through step 5 committed &
+pushed to https://github.com/jhong03/CoralCascade.git (main, root commit 4ea08a0; Unity
+.gitignore excludes Library/Temp/.plastic/csproj; commit from THIS git repo going forward —
+the old .plastic UVC workspace still exists on disk but is gitignored and stale).
 
 
 **Phase 1 (core-loop prototype) COMPLETE** — built, multi-agent reviewed (3 rounds), all fixes
