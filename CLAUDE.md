@@ -235,6 +235,26 @@ BubbleArt gained public `Get(name)` for decor loading. Star pips off-state = dar
 `BeginPanel/EndPanel` (padding-aware height + screen clamp + inert-when-fitting scroll
 view; EVERY early-return path must call EndPanel); DebugHUD content is scroll-wrapped.
 
+**UI quality pass (2026-07-16, user: "looks OK but make it better quality / feel"):** all
+procedural, no assets. `PrimitiveSprites` gained `Star()` (IQ sdStar5 SDF — REPLACES the
+orb star-pip workaround everywhere: DrawStars + meter pips; orbs remain for map nodes/
+pearls), `RoundedRectShaded(fill)` (candy button: top-lit gradient + bottom lip baked
+inside the 9-slice borders — buttons + active tab + urgent chip), `RoundedRectOutlined
+(fill, outline)` (~3px ring; overlay panels get a white ring, cached per color-pair —
+dictionary key is a (Color,Color) ValueTuple). GameFlow: `DrawLabelShadowed` (draws
+twice; page titles, map-node numbers — numbers moved OUT of the node button into an
+overlaid label since labels never eat clicks, forced GUI.enabled=true so swipes don't
+fade them) + node drop-shadow circles; top-bar Score/Shots/Tide became pill CHIPS
+(`_chipStyle`, fixedHeight 30·scale, margin-top centers in the 52·scale row; tide chip
+flips to pulsing coral `_chipUrgentStyle` when ShotsUntilPressure ≤ 1) + soft shadow
+gradient under the bar; overlay pop-in: `BeginPanel(w,h,openT)` scales around screen
+center with `EaseOutBack` and EndPanel restores GUI.matrix (every early-return already
+called EndPanel, so the contract held), pause records `_pauseOpenedAt`, end overlay
+derives openT from `_endSeenAt`+delay, target splash scales in around its own center
+(appear derived from `_splashUntil - SplashSeconds`); scrims fade with openT; home cards
+left-aligned two-size rich text + ">" chevron label; home title bobs on a sine; shop rows
+sit on `_rowStyle` translucent cards. Compile-verified (27 files).
+
 Pack shortlist (researched 2026-07-14):
 - **Kenney Fish Pack** (kenney.nl/assets/fish-pack, CC0, 120 vector sea creatures/tiles) —
   DONE for balls; seaweed/terrain/background_* decor + hud_number_* digits still unused.

@@ -50,10 +50,13 @@ namespace CoralCascade
         private FlowScreen _screen = FlowScreen.LevelSelect;
         private bool _paused;
         private float _pausedTimeScale = 1f;
+        private float _pauseOpenedAt; // drives the pause panel's pop-in (unscaled: timeScale is 0)
 
         // End-of-level overlay appears a beat after the state flips so the player sees the
         // final cascade land instead of an instant curtain.
         private const float EndOverlayDelaySeconds = 0.8f;
+        private const float SplashSeconds = 1.9f; // start-of-level target splash lifetime
+        private const float PanelPopSeconds = 0.22f; // overlay panels scale in with a bubble pop
         private bool _endSeen;
         private float _endSeenAt;
         private int _finalScore;
@@ -105,11 +108,14 @@ namespace CoralCascade
 
         private Texture2D _whiteTex;
         private Texture2D _mapGradientTex;
+        private Texture2D _barShadowTex; // soft drop shadow under the in-level top bar
         private GUIStyle _titleStyle, _subtitleStyle, _buttonStyle, _barLabelStyle, _overlayTitleStyle;
         private GUIStyle _nodeStyle, _nodeBestStyle, _tabStyle, _tabActiveStyle, _panelStyle;
         private GUIStyle _meterLabelStyle, _shopSmallStyle, _cardStyle, _cardActiveStyle;
+        private GUIStyle _chipStyle, _chipUrgentStyle, _nodeTextStyle, _chevronStyle, _rowStyle;
         private float _scale;
         private bool _stylesReady;
+        private Matrix4x4 _panelMatrix; // saved by BeginPanel (pop-in scale), restored by EndPanel
 
         // Star-target meter state: pips pulse the moment their score target is crossed.
         private int _meterLastScore;
@@ -294,7 +300,7 @@ namespace CoralCascade
             _paused = false;
             _endSeen = false;
             _manager.LoadLayout(level); // resets timescale, cascade, projectiles
-            _splashUntil = Time.unscaledTime + 1.9f; // show the star targets up front
+            _splashUntil = Time.unscaledTime + SplashSeconds; // show the star targets up front
             _screen = FlowScreen.Playing;
         }
 
@@ -302,6 +308,7 @@ namespace CoralCascade
         {
             if (_paused) return;
             _paused = true;
+            _pauseOpenedAt = Time.unscaledTime;
             _overlayScroll = Vector2.zero;
             _pausedTimeScale = Time.timeScale; // may be mid slow-mo; restored verbatim
             Time.timeScale = 0f;
@@ -319,7 +326,7 @@ namespace CoralCascade
             _paused = false;
             _endSeen = false;
             _manager.LoadLayout(_manager.CurrentLayout); // sets timescale back to 1 itself
-            _splashUntil = Time.unscaledTime + 1.9f;
+            _splashUntil = Time.unscaledTime + SplashSeconds;
         }
 
         /// <summary>Back to the map, landing on the given section's tab (default: the one just played).</summary>
@@ -371,6 +378,9 @@ namespace CoralCascade
             }
             if (_mapGradientTex == null)
                 _mapGradientTex = PrimitiveSprites.GradientTexture(MapTop, MapBottom);
+            if (_barShadowTex == null)
+                _barShadowTex = PrimitiveSprites.GradientTexture(new Color(0f, 0.10f, 0.18f, 0.16f),
+                                                                 new Color(0f, 0.10f, 0.18f, 0f));
 
             var border = new RectOffset(20, 20, 20, 20); // matches RoundedRect's 9-slice corners
 
@@ -390,16 +400,17 @@ namespace CoralCascade
             _overlayTitleStyle = new GUIStyle(_titleStyle) { fontSize = (int)(28 * _scale) };
 
             // Chunky coral buttons: fills are BAKED into the rounded textures (no
-            // GUI.backgroundColor games), white bold text in every state.
+            // GUI.backgroundColor games), white bold text in every state. The shaded
+            // variant (top-lit + bottom lip) makes them read as pressable candy.
             _buttonStyle = new GUIStyle(GUI.skin.button)
             {
                 fontSize = (int)(18 * _scale),
                 fontStyle = FontStyle.Bold,
                 border = border
             };
-            _buttonStyle.normal.background = PrimitiveSprites.RoundedRect(Coral);
-            _buttonStyle.hover.background = PrimitiveSprites.RoundedRect(Coral);
-            _buttonStyle.active.background = PrimitiveSprites.RoundedRect(CoralDark);
+            _buttonStyle.normal.background = PrimitiveSprites.RoundedRectShaded(Coral);
+            _buttonStyle.hover.background = PrimitiveSprites.RoundedRectShaded(Coral);
+            _buttonStyle.active.background = PrimitiveSprites.RoundedRectShaded(CoralDark);
             _buttonStyle.focused.background = _buttonStyle.normal.background;
             _buttonStyle.normal.textColor = Color.white;
             _buttonStyle.hover.textColor = Color.white;
@@ -417,7 +428,7 @@ namespace CoralCascade
             _tabStyle.focused.textColor = DeepTeal;
 
             _tabActiveStyle = new GUIStyle(_tabStyle);
-            _tabActiveStyle.normal.background = PrimitiveSprites.RoundedRect(Sunshine);
+            _tabActiveStyle.normal.background = PrimitiveSprites.RoundedRectShaded(Sunshine);
             _tabActiveStyle.hover.background = _tabActiveStyle.normal.background;
             _tabActiveStyle.active.background = _tabActiveStyle.normal.background;
             _tabActiveStyle.focused.background = _tabActiveStyle.normal.background;
@@ -457,6 +468,55 @@ namespace CoralCascade
             };
             _nodeBestStyle.normal.textColor = DeepTeal;
 
+            // Node numbers are drawn as a separate shadowed label ON TOP of the orb button
+            // (labels never eat clicks) so they stay readable on every node tint.
+            _nodeTextStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = (int)(22 * _scale),
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+            _nodeTextStyle.normal.textColor = Color.white;
+
+            // Top-bar stat chips: translucent white pills, deep-teal text; the urgent
+            // variant (tide about to drop) flips to solid coral with white text.
+            float chipH = 30f * _scale;
+            _chipStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = (int)(15 * _scale),
+                alignment = TextAnchor.MiddleCenter,
+                richText = true,
+                border = border,
+                padding = new RectOffset((int)(14 * _scale), (int)(14 * _scale), 0, 0),
+                margin = new RectOffset(0, 0, (int)(11 * _scale), 0), // centers in the 52px row
+                fixedHeight = chipH
+            };
+            _chipStyle.normal.background = PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.55f));
+            _chipStyle.normal.textColor = DeepTeal;
+            _chipUrgentStyle = new GUIStyle(_chipStyle);
+            _chipUrgentStyle.normal.background = PrimitiveSprites.RoundedRectShaded(Coral);
+            _chipUrgentStyle.normal.textColor = Color.white;
+
+            // Home-card chevron ("more inside" affordance) — plain ASCII, no glyph risk.
+            _chevronStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = (int)(26 * _scale),
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+            _chevronStyle.normal.textColor = SoftTeal;
+
+            // Shop rows sit on their own translucent card so the list reads as items,
+            // not a wall of text.
+            _rowStyle = new GUIStyle
+            {
+                border = border,
+                padding = new RectOffset((int)(8 * _scale), (int)(8 * _scale),
+                                         (int)(5 * _scale), (int)(5 * _scale)),
+                margin = new RectOffset(0, (int)(4 * _scale), 0, 0)
+            };
+            _rowStyle.normal.background = PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.50f));
+
             _meterLabelStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = (int)(13 * _scale),
@@ -471,18 +531,32 @@ namespace CoralCascade
             };
             _shopSmallStyle.normal.textColor = SoftTeal;
 
-            // Home-page section cards: two-line rich text ("<b>Title</b>\nprogress").
-            _cardStyle = new GUIStyle(_tabStyle) { fontSize = (int)(17 * _scale), richText = true };
-            _cardActiveStyle = new GUIStyle(_tabActiveStyle) { fontSize = (int)(17 * _scale), richText = true };
+            // Home-page section cards: two-line rich text ("<b>Title</b>\nprogress"),
+            // left-aligned like a real list card, right padding reserves the chevron slot.
+            _cardStyle = new GUIStyle(_tabStyle)
+            {
+                fontSize = (int)(17 * _scale),
+                richText = true,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset((int)(22 * _scale), (int)(48 * _scale), 0, 0)
+            };
+            _cardActiveStyle = new GUIStyle(_tabActiveStyle)
+            {
+                fontSize = (int)(17 * _scale),
+                richText = true,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset((int)(22 * _scale), (int)(48 * _scale), 0, 0)
+            };
 
-            // Light rounded panel for pause/win/lose (text on it is deep teal).
+            // Light rounded panel for pause/win/lose (text on it is deep teal); the white
+            // outline ring lifts it off the teal scrim like a bubble card.
             _panelStyle = new GUIStyle(GUI.skin.box)
             {
                 border = border,
                 padding = new RectOffset((int)(22 * _scale), (int)(22 * _scale),
                                          (int)(18 * _scale), (int)(18 * _scale))
             };
-            _panelStyle.normal.background = PrimitiveSprites.RoundedRect(PanelFill);
+            _panelStyle.normal.background = PrimitiveSprites.RoundedRectOutlined(PanelFill, Color.white);
 
             _stylesReady = true;
         }
@@ -550,12 +624,43 @@ namespace CoralCascade
             return new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
         }
 
+        /// <summary>Ease-out with a soft overshoot — the standard bubbly pop-in curve.</summary>
+        private static float EaseOutBack(float t)
+        {
+            const float c1 = 1.70158f, c3 = c1 + 1f;
+            t -= 1f;
+            return 1f + c3 * t * t * t + c1 * t * t;
+        }
+
+        /// <summary>
+        /// Label with a soft drop shadow (drawn twice) — the only way IMGUI text gets any
+        /// depth on the bright water backdrop. Mutates-and-restores the style's text color.
+        /// </summary>
+        private void DrawLabelShadowed(Rect r, string text, GUIStyle style)
+        {
+            float off = 1.5f * _scale;
+            var old = style.normal.textColor;
+            style.normal.textColor = new Color(0f, 0.12f, 0.20f, 0.35f);
+            GUI.Label(new Rect(r.x, r.y + off, r.width, r.height), text, style);
+            style.normal.textColor = old;
+            GUI.Label(r, text, style);
+        }
+
         // ---- Overlay panel plumbing ----------------------------------------------------------
         // Heights are estimates, so the panel budgets for its own padding plus slack, clamps
         // to the screen, and wraps content in a scroll view (inert while everything fits).
+        // openT < 1 scales the panel in around the screen center (pop-in); EndPanel restores
+        // the matrix, so every early-return path keeps its existing "call EndPanel" contract.
 
-        private void BeginPanel(float width, float contentHeight)
+        private void BeginPanel(float width, float contentHeight, float openT = 1f)
         {
+            _panelMatrix = GUI.matrix;
+            if (openT < 1f)
+            {
+                float s = Mathf.Max(0.01f, EaseOutBack(Mathf.Clamp01(openT)));
+                GUIUtility.ScaleAroundPivot(new Vector2(s, s),
+                    new Vector2(Screen.width * 0.5f, Screen.height * 0.5f));
+            }
             float h = contentHeight + _panelStyle.padding.top + _panelStyle.padding.bottom + 10f * _scale;
             h = Mathf.Min(h, Screen.height - 30f);
             GUILayout.BeginArea(CenteredColumn(width, h), _panelStyle);
@@ -566,16 +671,17 @@ namespace CoralCascade
         {
             GUILayout.EndScrollView();
             GUILayout.EndArea();
+            GUI.matrix = _panelMatrix;
         }
 
         /// <summary>
-        /// Draws a centered row of 3 star pips (gold = earned, faint = not). Uses the shared
-        /// primitive circle texture — no font glyph dependence, works everywhere.
+        /// Draws a centered row of 3 star pips (gold = earned, faint = not). Uses the
+        /// procedural star sprite — real star shapes, still no font glyph dependence.
         /// </summary>
         private void DrawStars(Rect area, int stars, float size)
         {
-            Texture tex = PrimitiveSprites.GlossyOrb().texture; // gold pearls, not flat dots
-            float gap = size * 0.4f;
+            Texture tex = PrimitiveSprites.Star().texture;
+            float gap = size * 0.3f;
             float x = area.x + (area.width - (3f * size + 2f * gap)) * 0.5f;
             float y = area.y + (area.height - size) * 0.5f;
             var old = GUI.color;
@@ -607,7 +713,7 @@ namespace CoralCascade
             // ---- Section route page: Back + section title, then the winding path ----
             if (DrawBackButton())
                 return;
-            GUI.Label(new Rect(0, 12f * _scale, Screen.width, 40f * _scale), Active.Title, _titleStyle);
+            DrawLabelShadowed(new Rect(0, 12f * _scale, Screen.width, 40f * _scale), Active.Title, _titleStyle);
             DrawPearlChip();
 
             float mapTop = 68f * _scale;
@@ -685,7 +791,16 @@ namespace CoralCascade
                     ? nodeSize * (1f + 0.06f * Mathf.Sin(Time.unscaledTime * 4f))
                     : nodeSize;
                 var rect = new Rect(c.x - size * 0.5f, c.y - size * 0.5f, size, size);
-                if (GUI.Button(rect, unlocked ? levelNumber.ToString() : "-", _nodeStyle))
+
+                // Soft drop shadow under the node — cheap depth on the flat map.
+                var oldTint = GUI.color;
+                GUI.color = new Color(0f, 0.12f, 0.22f, 0.20f);
+                GUI.DrawTexture(new Rect(rect.x + 2f * _scale, rect.y + 5f * _scale,
+                                         rect.width, rect.height), circleTex);
+                GUI.color = oldTint;
+
+                // Number drawn as a shadowed label ON TOP (labels never eat button clicks).
+                if (GUI.Button(rect, GUIContent.none, _nodeStyle))
                 {
                     GUI.enabled = true;
                     GUI.backgroundColor = oldBg;
@@ -693,6 +808,8 @@ namespace CoralCascade
                     StartLevel(section, section.Levels[i]);
                     return;
                 }
+                GUI.enabled = true; // label must not fade while a swipe disables the buttons
+                DrawLabelShadowed(rect, unlocked ? levelNumber.ToString() : "-", _nodeTextStyle);
 
                 if (cleared)
                 {
@@ -714,10 +831,12 @@ namespace CoralCascade
         /// <summary>The main menu: title, daily banner, then one big card per destination.</summary>
         private void DrawHomePage()
         {
-            GUILayout.BeginArea(new Rect(0, 24f * _scale, Screen.width, 92f * _scale));
-            GUILayout.Label("CORAL CASCADE", _titleStyle);
-            GUILayout.Label("Choose your waters", _subtitleStyle);
-            GUILayout.EndArea();
+            // The title bobs gently like it's floating — subtle, but the page feels alive.
+            float bob = Mathf.Sin(Time.unscaledTime * 1.1f) * 2.5f * _scale;
+            DrawLabelShadowed(new Rect(0, 24f * _scale + bob, Screen.width, 48f * _scale),
+                              "CORAL CASCADE", _titleStyle);
+            GUI.Label(new Rect(0, 72f * _scale + bob, Screen.width, 24f * _scale),
+                      "Choose your waters", _subtitleStyle);
             DrawPearlChip();
 
             float y = 128f * _scale;
@@ -750,7 +869,7 @@ namespace CoralCascade
         {
             if (DrawBackButton())
                 return;
-            GUI.Label(new Rect(0, 12f * _scale, Screen.width, 40f * _scale), "My Reef", _titleStyle);
+            DrawLabelShadowed(new Rect(0, 12f * _scale, Screen.width, 40f * _scale), "My Reef", _titleStyle);
             DrawPearlChip();
             float top = 68f * _scale;
             DrawReefTank(new Rect(0, top, Screen.width, Screen.height - top));
@@ -792,9 +911,13 @@ namespace CoralCascade
             y += h + 12f * _scale;
             bool swiping = _dragDistance > 15f; // same guard as everywhere: swipes never tap
             GUI.enabled = !swiping;
-            bool hit = GUI.Button(rect, $"<b>{title}</b>\n{sub}",
-                                  highlight ? _cardActiveStyle : _cardStyle);
+            // Two type sizes give the card a real hierarchy: big title, quiet subtitle.
+            string body = $"<size={(int)(19f * _scale)}><b>{title}</b></size>\n" +
+                          $"<size={(int)(13f * _scale)}><color=#0A5978>{sub}</color></size>";
+            bool hit = GUI.Button(rect, body, highlight ? _cardActiveStyle : _cardStyle);
             GUI.enabled = true;
+            GUI.Label(new Rect(rect.xMax - 44f * _scale, rect.y, 32f * _scale, rect.height),
+                      ">", _chevronStyle); // labels never eat the button's click
             return hit;
         }
 
@@ -1069,7 +1192,8 @@ namespace CoralCascade
             _shopScroll = GUILayout.BeginScrollView(_shopScroll);
             foreach (var item in ReefStore.Catalog)
             {
-                GUILayout.BeginHorizontal(GUILayout.Height(46f * _scale));
+                // Each item on its own translucent card — the list reads as rows, not text.
+                GUILayout.BeginHorizontal(_rowStyle, GUILayout.Height(52f * _scale));
                 var iconRect = GUILayoutUtility.GetRect(42f * _scale, 42f * _scale,
                                                         GUILayout.Width(42f * _scale));
                 DrawReefItemIcon(iconRect, item);
@@ -1141,12 +1265,16 @@ namespace CoralCascade
             float meterH = 24f * _scale;
             float h = row1H + meterH;
             _topBarRect = new Rect(0, 0, Screen.width, h);
-            // Frosted light bar over the bright water (deep-teal text sits on it).
+            // Frosted light bar over the bright water (deep-teal text sits on it), with a
+            // soft shadow fading out below it so the bar reads as a layer, not a stripe.
             var oldBarColor = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, 0.40f);
             GUI.DrawTexture(_topBarRect, _whiteTex);
             GUI.color = new Color(1f, 1f, 1f, 0.55f);
             GUI.DrawTexture(new Rect(0, h - 2f, Screen.width, 2f), _whiteTex);
+            GUI.color = Color.white;
+            GUI.DrawTexture(new Rect(0, h, Screen.width, 7f * _scale), _barShadowTex,
+                            ScaleMode.StretchToFill);
             GUI.color = oldBarColor;
 
             float pad = 10f * _scale;
@@ -1158,16 +1286,21 @@ namespace CoralCascade
             GUILayout.Label(idx >= 0 ? $"<b>{_playingSection.NodePrefix} {idx + 1}</b>  {name}" : $"<b>{name}</b>",
                             _barLabelStyle, GUILayout.ExpandHeight(true));
             GUILayout.FlexibleSpace();
-            GUILayout.Label($"Score  <b>{_manager.Score.Total}</b>",
-                            _barLabelStyle, GUILayout.ExpandHeight(true));
-            GUILayout.Space(12f * _scale);
-            GUILayout.Label($"Shots  <b>{_manager.State.ShotsRemaining}</b>",
-                            _barLabelStyle, GUILayout.ExpandHeight(true));
+            // Stats live in pill chips so the HUD reads as designed UI, not floating text.
+            GUILayout.Label($"Score  <b>{_manager.Score.Total}</b>", _chipStyle);
+            GUILayout.Space(8f * _scale);
+            GUILayout.Label($"Shots  <b>{_manager.State.ShotsRemaining}</b>", _chipStyle);
             if (_manager.PressureActive)
             {
-                GUILayout.Space(12f * _scale);
+                GUILayout.Space(8f * _scale);
+                // The tide chip goes coral and pulses when the NEXT shot drops the board.
+                bool urgent = _manager.ShotsUntilPressure <= 1;
+                var oldChipColor = GUI.color;
+                if (urgent)
+                    GUI.color = new Color(1f, 1f, 1f, 0.75f + 0.25f * Mathf.Sin(Time.unscaledTime * 7f));
                 GUILayout.Label($"Tide in  <b>{_manager.ShotsUntilPressure}</b>",
-                                _barLabelStyle, GUILayout.ExpandHeight(true));
+                                urgent ? _chipUrgentStyle : _chipStyle);
+                GUI.color = oldChipColor;
             }
             GUILayout.Space(12f * _scale);
 
@@ -1233,16 +1366,16 @@ namespace CoralCascade
 
         private void DrawMeterPip(Rect bar, float frac, bool lit, float litAt)
         {
-            float size = 15f * _scale;
+            float size = 17f * _scale; // stars have a thinner silhouette than orbs
             if (lit)
             {
                 float k = Mathf.Max(0f, 1f - (Time.unscaledTime - litAt) / 0.45f);
                 size *= 1f + 0.7f * k; // pop the moment it's earned
             }
-            GUI.color = lit ? new Color(1f, 0.8f, 0.15f) : new Color(1f, 1f, 1f, 0.6f);
+            GUI.color = lit ? new Color(1f, 0.8f, 0.15f) : new Color(1f, 1f, 1f, 0.7f);
             var c = new Vector2(bar.x + bar.width * frac, bar.y + bar.height * 0.5f);
             GUI.DrawTexture(new Rect(c.x - size * 0.5f, c.y - size * 0.5f, size, size),
-                            PrimitiveSprites.GlossyOrb().texture);
+                            PrimitiveSprites.Star().texture);
         }
 
         /// <summary>
@@ -1258,11 +1391,18 @@ namespace CoralCascade
             if (t3 <= 0) return;
 
             float fade = Mathf.Clamp01((_splashUntil - Time.unscaledTime) / 0.4f);
+            // Pops in with the same bubble curve as the overlays (appear time is derived
+            // from _splashUntil, which is always set to now + SplashSeconds).
+            float appear = Mathf.Clamp01(
+                (Time.unscaledTime - (_splashUntil - SplashSeconds)) / PanelPopSeconds);
             var old = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, fade);
             float w = Mathf.Min(360f * _scale, Screen.width - 80f);
             float h = 108f * _scale;
             var rect = new Rect((Screen.width - w) * 0.5f, Screen.height * 0.26f, w, h);
+            var oldMatrix = GUI.matrix;
+            GUIUtility.ScaleAroundPivot(
+                Vector2.one * Mathf.Max(0.01f, EaseOutBack(appear)), rect.center);
             GUI.Box(rect, GUIContent.none, _panelStyle);
             GUI.Label(new Rect(rect.x, rect.y + 10f * _scale, rect.width, 34f * _scale),
                       layout != null ? layout.Name : "", _overlayTitleStyle);
@@ -1270,17 +1410,20 @@ namespace CoralCascade
                       $"2-star {t2}   ·   3-star {t3}", _subtitleStyle);
             GUI.Label(new Rect(rect.x, rect.y + 74f * _scale, rect.width, 22f * _scale),
                       "Clear the reef to earn your first star!", _subtitleStyle);
+            GUI.matrix = oldMatrix;
             GUI.color = old;
         }
 
         private void DrawPauseOverlay()
         {
             _modalOpen = true;
-            FillScreen(new Color(0f, 0.20f, 0.30f, 0.45f)); // teal dim, not a blackout
+            float openT = Mathf.Clamp01((Time.unscaledTime - _pauseOpenedAt) / PanelPopSeconds);
+            // Scrim fades in with the panel pop — teal dim, not a blackout.
+            FillScreen(new Color(0f, 0.20f, 0.30f, 0.45f * openT));
 
             float w = Mathf.Min(340f * _scale, Screen.width - 60f);
             float btnH = 50f * _scale;
-            BeginPanel(w, 58f * _scale + 3f * (btnH + 10f * _scale));
+            BeginPanel(w, 58f * _scale + 3f * (btnH + 10f * _scale), openT);
             GUILayout.Label("PAUSED", _overlayTitleStyle);
             GUILayout.Space(12f * _scale);
             if (GUILayout.Button("Resume", _buttonStyle, GUILayout.Height(btnH)))
@@ -1298,7 +1441,10 @@ namespace CoralCascade
         {
             _modalOpen = true;
             bool won = _manager.State.State == GameState.Won;
-            FillScreen(new Color(0f, 0.20f, 0.30f, 0.45f)); // teal dim, not a blackout
+            float openT = Mathf.Clamp01(
+                (Time.unscaledTime - _endSeenAt - EndOverlayDelaySeconds) / PanelPopSeconds);
+            // Scrim fades in with the panel pop — teal dim, not a blackout.
+            FillScreen(new Color(0f, 0.20f, 0.30f, 0.45f * openT));
 
             int idx = CurrentLevelIndex();
             bool hasNext = won && idx >= 0 && idx + 1 < _playingSection.Levels.Count;
@@ -1311,7 +1457,7 @@ namespace CoralCascade
             int buttons = won ? ((hasNext || introFinished) ? 3 : 2) : 2;
             float starRowH = won ? 88f * _scale : 0f; // stars + target line + pearls line
             float bonusRowH = won && _endShotsLeft > 0 ? 22f * _scale : 0f;
-            BeginPanel(w, 168f * _scale + starRowH + bonusRowH + buttons * (btnH + 10f * _scale));
+            BeginPanel(w, 168f * _scale + starRowH + bonusRowH + buttons * (btnH + 10f * _scale), openT);
             string loseTitle = _manager.PressureLoss ? "THE TIDE ROSE!" : "OUT OF SHOTS";
             string loseSub = _manager.PressureLoss ? "The reef crossed the danger line."
                                                    : "The bubbles won this round.";

@@ -13,8 +13,12 @@ namespace CoralCascade
         private static Sprite _circle;
         private static Sprite _orb;
         private static Sprite _gloss;
+        private static Sprite _star;
         private static Material _unlit;
         private static readonly Dictionary<Color, Texture2D> _rounded = new Dictionary<Color, Texture2D>();
+        private static readonly Dictionary<Color, Texture2D> _shadedRects = new Dictionary<Color, Texture2D>();
+        private static readonly Dictionary<(Color, Color), Texture2D> _outlinedRects =
+            new Dictionary<(Color, Color), Texture2D>();
 
         /// <summary>
         /// Shared unlit sprite material. In a URP 2D project the default sprite material can be
@@ -155,6 +159,52 @@ namespace CoralCascade
             return _gloss;
         }
 
+        /// <summary>
+        /// A classic 5-point star (points up), anti-aliased with a soft darkened edge so it
+        /// reads as a chunky sticker. White — tint it gold via GUI.color / SpriteRenderer.
+        /// Replaces the orb-pip workaround (LegacyRuntime has no ★ glyph); still zero
+        /// imported art. Signed distance per Inigo Quilez's sdStar5.
+        /// </summary>
+        public static Sprite Star()
+        {
+            if (_star != null) return _star;
+
+            const int size = 128;
+            float half = (size - 1) * 0.5f;
+            const float r = 0.90f;   // outer radius in normalized coords
+            const float rf = 0.55f;  // inner/outer ratio — plumper than the classic 0.5
+            var k1 = new Vector2(0.809016994f, -0.587785252f);
+            var k2 = new Vector2(-k1.x, k1.y);
+            var ba = rf * new Vector2(-k1.y, k1.x) - new Vector2(0f, 1f);
+            float baLen2 = Vector2.Dot(ba, ba);
+
+            var tex = NewTex(size);
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    var p = new Vector2(Mathf.Abs((x - half) / half), (y - half) / half);
+                    p -= 2f * Mathf.Max(Vector2.Dot(k1, p), 0f) * k1;
+                    p -= 2f * Mathf.Max(Vector2.Dot(k2, p), 0f) * k2;
+                    p.x = Mathf.Abs(p.x);
+                    p.y -= r;
+                    float t = Mathf.Clamp(Vector2.Dot(p, ba) / baLen2, 0f, r);
+                    var q = p - ba * t;
+                    float d = q.magnitude * Mathf.Sign(p.y * ba.x - p.x * ba.y);
+                    float a = Mathf.Clamp01(-d * half / 1.5f); // 1.5px AA edge
+                    // Slightly darker toward the silhouette so the tinted star has depth.
+                    float lum = 1f - 0.18f * (1f - Mathf.Clamp01(-d / 0.30f));
+                    pixels[y * size + x] = new Color(lum, lum, lum, a);
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            _star = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            _star.name = "Star";
+            return _star;
+        }
+
         private static Sprite _pixel;
 
         /// <summary>A plain white 1-unit square — for solid bars/strips (e.g. danger line).</summary>
@@ -233,6 +283,84 @@ namespace CoralCascade
             tex.SetPixels32(pixels);
             tex.Apply();
             _rounded[fill] = tex;
+            return tex;
+        }
+
+        /// <summary>
+        /// A candy-style shaded rounded rect for chunky buttons: lighter toward the top,
+        /// a soft highlight along the top edge and a darker "lip" along the bottom (both
+        /// live inside the 9-slice borders so they survive stretching). Same 9-slice
+        /// contract as <see cref="RoundedRect"/> (border 20). Cached per color.
+        /// </summary>
+        public static Texture2D RoundedRectShaded(Color fill)
+        {
+            Texture2D cached;
+            if (_shadedRects.TryGetValue(fill, out cached) && cached != null) return cached;
+
+            const int size = 64;
+            const float margin = 2f, radius = 16f;
+            float half = (size - 1) * 0.5f;
+            float inner = half - margin - radius;
+
+            var tex = NewTex(size);
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float qx = Mathf.Max(Mathf.Abs(x - half) - inner, 0f);
+                    float qy = Mathf.Max(Mathf.Abs(y - half) - inner, 0f);
+                    float dist = Mathf.Sqrt(qx * qx + qy * qy);
+                    float a = Mathf.Clamp01((radius - dist) / 1.5f);
+
+                    float shade = Mathf.Lerp(0.90f, 1.10f, y / (float)(size - 1)); // top-lit
+                    shade *= 1f - 0.22f * Mathf.Clamp01((13f - y) / 9f);            // bottom lip
+                    shade *= 1f + 0.10f * Mathf.Clamp01((y - (size - 11f)) / 7f);   // top shine
+                    pixels[y * size + x] = new Color(Mathf.Clamp01(fill.r * shade),
+                                                     Mathf.Clamp01(fill.g * shade),
+                                                     Mathf.Clamp01(fill.b * shade),
+                                                     fill.a * a);
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            _shadedRects[fill] = tex;
+            return tex;
+        }
+
+        /// <summary>
+        /// A rounded rect with a crisp ~3px outline ring — for panels and chips that need
+        /// to pop off busy backdrops. Same 9-slice contract as <see cref="RoundedRect"/>.
+        /// Cached per (fill, outline) pair.
+        /// </summary>
+        public static Texture2D RoundedRectOutlined(Color fill, Color outline)
+        {
+            Texture2D cached;
+            if (_outlinedRects.TryGetValue((fill, outline), out cached) && cached != null) return cached;
+
+            const int size = 64;
+            const float margin = 2f, radius = 16f, outlineW = 3f;
+            float half = (size - 1) * 0.5f;
+            float inner = half - margin - radius;
+
+            var tex = NewTex(size);
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float qx = Mathf.Max(Mathf.Abs(x - half) - inner, 0f);
+                    float qy = Mathf.Max(Mathf.Abs(y - half) - inner, 0f);
+                    float dist = Mathf.Sqrt(qx * qx + qy * qy);
+                    float edgeA = Mathf.Clamp01((radius - dist) / 1.5f);
+                    float innerT = Mathf.Clamp01((radius - dist - outlineW) / 1.5f);
+                    Color c = Color.Lerp(outline, fill, innerT);
+                    pixels[y * size + x] = new Color(c.r, c.g, c.b, c.a * edgeA);
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            _outlinedRects[(fill, outline)] = tex;
             return tex;
         }
     }
