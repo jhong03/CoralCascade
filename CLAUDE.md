@@ -255,6 +255,29 @@ derives openT from `_endSeenAt`+delay, target splash scales in around its own ce
 left-aligned two-size rich text + ">" chevron label; home title bobs on a sine; shop rows
 sit on `_rowStyle` translucent cards. Compile-verified (27 files).
 
+**UI pass round 2 (2026-07-16, continuation of the quality pass — user approved the
+suggestion list):** Kenney UI Pack DOWNLOADED (CC0, direct zip from kenney.nl; license
+copy at `Assets/Art/KenneyUIPack_License.txt`) — **fonts**: `Assets/Resources/Fonts/`
+KenneyFuture.ttf (display: titles/buttons/node numbers/chevron, set fontStyle Normal —
+the face is already heavy, faux-bold mushes it) + KenneyFutureNarrow.ttf (body:
+subtitles/bar labels/chips/meter/shop/node-best). **Button plates**:
+`Assets/Resources/Art/UI/` button_{red,yellow,grey}_{depth,flat}.png — DEFAULT 1x set
+(192x64), NOT Double: 9-slice border vertical sum must stay under the smallest button
+(38·scale) and 2x corner radii can't; `plateBorder` scales with _scale, clamped to
+(14..60, 14..30 top, 22..31 bottom). normal=depth plate, active=flat plate (reads as
+physically pressed); red=primary buttons, yellow=active tab/highlight cards, grey
+flat=neutral tabs. ALL loads null-safe in `EnsureStyles` (`_skinProbed` once per domain
+load; missing import → procedural skin fallback, game still needs zero assets).
+**Menu page transitions**: DrawLevelSelect wraps page dispatch (section route extracted
+to `DrawSectionMapPage`) in an EaseOutBack slide-up + fade (0.28s, content only —
+backdrop stays put); `_lastDrawnPage` sentinel −1 forces replay on back-from-level.
+NOTE: DrawSpriteGUI sets GUI.color absolutely, so tank sprites ignore the fade — accepted
+(0.28s). **End-overlay mascot**: `DrawEndFish` — fish_orange bounces on win, fish_blue
+grey-tinted droops on loss, rect-offset animation ONLY (GUI.matrix rotation misbehaves
+inside BeginArea), panel height budgets `fishRowH` when the sprite exists.
+Compile-verified. GOTCHA: new PNGs/TTFs need the editor to generate .metas on next
+focus — commit the .metas when they appear so GUIDs stick.
+
 Pack shortlist (researched 2026-07-14):
 - **Kenney Fish Pack** (kenney.nl/assets/fish-pack, CC0, 120 vector sea creatures/tiles) —
   DONE for balls; seaweed/terrain/background_* decor + hud_number_* digits still unused.

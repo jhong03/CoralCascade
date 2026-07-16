@@ -117,6 +117,17 @@ namespace CoralCascade
         private bool _stylesReady;
         private Matrix4x4 _panelMatrix; // saved by BeginPanel (pop-in scale), restored by EndPanel
 
+        // Imported skin (Kenney UI Pack, CC0): display + narrow fonts and 9-slice button
+        // plates. ALL null-safe — the procedural skin is the fallback when the assets
+        // haven't been imported (the game must never require imported art to run).
+        private bool _skinProbed;
+        private Font _fontDisplay, _fontBody;
+        private Texture2D _btnRedUp, _btnRedDown, _btnYellowUp, _btnYellowDown, _btnGreyFlat;
+
+        // Menu page transition: the incoming page slides up + fades for a beat.
+        private MenuPage _lastDrawnPage = (MenuPage)(-1);
+        private float _pageShownAt;
+
         // Star-target meter state: pips pulse the moment their score target is crossed.
         private int _meterLastScore;
         private bool _pip2Lit, _pip3Lit;
@@ -348,6 +359,7 @@ namespace CoralCascade
             }
             Active.MapOffset = -1f;             // re-center the map on the frontier
             _menuPage = MenuPage.SectionMap;    // back from a level lands on its route page
+            _lastDrawnPage = (MenuPage)(-1);    // replay the page slide-in on return
             _screen = FlowScreen.LevelSelect;
         }
 
@@ -382,7 +394,28 @@ namespace CoralCascade
                 _barShadowTex = PrimitiveSprites.GradientTexture(new Color(0f, 0.10f, 0.18f, 0.16f),
                                                                  new Color(0f, 0.10f, 0.18f, 0f));
 
+            if (!_skinProbed)
+            {
+                // One probe per domain load; a Unity import triggers a domain reload, so a
+                // late import still lands on the next Play. Missing assets = null = fallback.
+                _skinProbed = true;
+                _fontDisplay = Resources.Load<Font>("Fonts/KenneyFuture");
+                _fontBody = Resources.Load<Font>("Fonts/KenneyFutureNarrow");
+                _btnRedUp = Resources.Load<Texture2D>("Art/UI/button_red_depth");
+                _btnRedDown = Resources.Load<Texture2D>("Art/UI/button_red_flat");
+                _btnYellowUp = Resources.Load<Texture2D>("Art/UI/button_yellow_depth");
+                _btnYellowDown = Resources.Load<Texture2D>("Art/UI/button_yellow_flat");
+                _btnGreyFlat = Resources.Load<Texture2D>("Art/UI/button_grey_flat");
+            }
+            if (_fontBody == null) _fontBody = _fontDisplay; // narrow variant optional
+
             var border = new RectOffset(20, 20, 20, 20); // matches RoundedRect's 9-slice corners
+            // Pack plates are 192x64 (1x): corner radius ~13px, depth lip ~8px. The border
+            // grows with UI scale for chunkier corners but stays inside the texture halves,
+            // and its vertical sum stays under the smallest button height (38*scale).
+            var plateBorder = new RectOffset(
+                (int)Mathf.Clamp(14f * _scale, 14f, 60f), (int)Mathf.Clamp(14f * _scale, 14f, 60f),
+                (int)Mathf.Clamp(14f * _scale, 14f, 30f), (int)Mathf.Clamp(22f * _scale, 22f, 31f));
 
             _titleStyle = new GUIStyle(GUI.skin.label)
             {
@@ -391,34 +424,52 @@ namespace CoralCascade
                 alignment = TextAnchor.MiddleCenter
             };
             _titleStyle.normal.textColor = DeepTeal;
+            if (_fontDisplay != null) { _titleStyle.font = _fontDisplay; _titleStyle.fontStyle = FontStyle.Normal; }
             _subtitleStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = (int)(15 * _scale),
                 alignment = TextAnchor.MiddleCenter
             };
             _subtitleStyle.normal.textColor = SoftTeal;
+            if (_fontBody != null) _subtitleStyle.font = _fontBody;
             _overlayTitleStyle = new GUIStyle(_titleStyle) { fontSize = (int)(28 * _scale) };
 
-            // Chunky coral buttons: fills are BAKED into the rounded textures (no
-            // GUI.backgroundColor games), white bold text in every state. The shaded
-            // variant (top-lit + bottom lip) makes them read as pressable candy.
+            // Chunky coral buttons: fills are BAKED into the textures (no GUI.backgroundColor
+            // games), white bold text in every state. With the Kenney UI Pack imported the
+            // plates are the pack's depth buttons (pressed = flat plate, visually pushed
+            // down); otherwise the procedural shaded rounded rect stands in.
             _buttonStyle = new GUIStyle(GUI.skin.button)
             {
                 fontSize = (int)(18 * _scale),
                 fontStyle = FontStyle.Bold,
                 border = border
             };
-            _buttonStyle.normal.background = PrimitiveSprites.RoundedRectShaded(Coral);
-            _buttonStyle.hover.background = PrimitiveSprites.RoundedRectShaded(Coral);
-            _buttonStyle.active.background = PrimitiveSprites.RoundedRectShaded(CoralDark);
+            if (_btnRedUp != null && _btnRedDown != null)
+            {
+                _buttonStyle.border = plateBorder;
+                _buttonStyle.normal.background = _btnRedUp;
+                _buttonStyle.hover.background = _btnRedUp;
+                _buttonStyle.active.background = _btnRedDown;
+            }
+            else
+            {
+                _buttonStyle.normal.background = PrimitiveSprites.RoundedRectShaded(Coral);
+                _buttonStyle.hover.background = PrimitiveSprites.RoundedRectShaded(Coral);
+                _buttonStyle.active.background = PrimitiveSprites.RoundedRectShaded(CoralDark);
+            }
             _buttonStyle.focused.background = _buttonStyle.normal.background;
             _buttonStyle.normal.textColor = Color.white;
             _buttonStyle.hover.textColor = Color.white;
             _buttonStyle.active.textColor = Color.white;
             _buttonStyle.focused.textColor = Color.white;
+            if (_fontDisplay != null) { _buttonStyle.font = _fontDisplay; _buttonStyle.fontStyle = FontStyle.Normal; }
 
             _tabStyle = new GUIStyle(_buttonStyle);
-            _tabStyle.normal.background = PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.38f));
+            _tabStyle.border = border;
+            _tabStyle.normal.background = _btnGreyFlat != null
+                ? _btnGreyFlat
+                : PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.38f));
+            if (_btnGreyFlat != null) _tabStyle.border = plateBorder;
             _tabStyle.hover.background = _tabStyle.normal.background;
             _tabStyle.active.background = _tabStyle.normal.background;
             _tabStyle.focused.background = _tabStyle.normal.background;
@@ -428,10 +479,21 @@ namespace CoralCascade
             _tabStyle.focused.textColor = DeepTeal;
 
             _tabActiveStyle = new GUIStyle(_tabStyle);
-            _tabActiveStyle.normal.background = PrimitiveSprites.RoundedRectShaded(Sunshine);
-            _tabActiveStyle.hover.background = _tabActiveStyle.normal.background;
-            _tabActiveStyle.active.background = _tabActiveStyle.normal.background;
-            _tabActiveStyle.focused.background = _tabActiveStyle.normal.background;
+            if (_btnYellowUp != null && _btnYellowDown != null)
+            {
+                _tabActiveStyle.border = plateBorder;
+                _tabActiveStyle.normal.background = _btnYellowUp;
+                _tabActiveStyle.active.background = _btnYellowDown;
+                _tabActiveStyle.hover.background = _btnYellowUp;
+                _tabActiveStyle.focused.background = _btnYellowUp;
+            }
+            else
+            {
+                _tabActiveStyle.normal.background = PrimitiveSprites.RoundedRectShaded(Sunshine);
+                _tabActiveStyle.hover.background = _tabActiveStyle.normal.background;
+                _tabActiveStyle.active.background = _tabActiveStyle.normal.background;
+                _tabActiveStyle.focused.background = _tabActiveStyle.normal.background;
+            }
 
             _barLabelStyle = new GUIStyle(GUI.skin.label)
             {
@@ -440,6 +502,7 @@ namespace CoralCascade
                 richText = true
             };
             _barLabelStyle.normal.textColor = DeepTeal;
+            if (_fontBody != null) _barLabelStyle.font = _fontBody;
 
             // Map nodes are bubbles: the button background is the shaded orb texture
             // (tint comes via GUI.backgroundColor at the draw site — baked shading makes
@@ -467,6 +530,7 @@ namespace CoralCascade
                 alignment = TextAnchor.UpperCenter
             };
             _nodeBestStyle.normal.textColor = DeepTeal;
+            if (_fontBody != null) _nodeBestStyle.font = _fontBody;
 
             // Node numbers are drawn as a separate shadowed label ON TOP of the orb button
             // (labels never eat clicks) so they stay readable on every node tint.
@@ -477,6 +541,7 @@ namespace CoralCascade
                 alignment = TextAnchor.MiddleCenter
             };
             _nodeTextStyle.normal.textColor = Color.white;
+            if (_fontDisplay != null) { _nodeTextStyle.font = _fontDisplay; _nodeTextStyle.fontStyle = FontStyle.Normal; }
 
             // Top-bar stat chips: translucent white pills, deep-teal text; the urgent
             // variant (tide about to drop) flips to solid coral with white text.
@@ -493,6 +558,7 @@ namespace CoralCascade
             };
             _chipStyle.normal.background = PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.55f));
             _chipStyle.normal.textColor = DeepTeal;
+            if (_fontBody != null) _chipStyle.font = _fontBody;
             _chipUrgentStyle = new GUIStyle(_chipStyle);
             _chipUrgentStyle.normal.background = PrimitiveSprites.RoundedRectShaded(Coral);
             _chipUrgentStyle.normal.textColor = Color.white;
@@ -505,6 +571,7 @@ namespace CoralCascade
                 alignment = TextAnchor.MiddleCenter
             };
             _chevronStyle.normal.textColor = SoftTeal;
+            if (_fontDisplay != null) _chevronStyle.font = _fontDisplay;
 
             // Shop rows sit on their own translucent card so the list reads as items,
             // not a wall of text.
@@ -523,6 +590,7 @@ namespace CoralCascade
                 alignment = TextAnchor.MiddleRight
             };
             _meterLabelStyle.normal.textColor = DeepTeal;
+            if (_fontBody != null) _meterLabelStyle.font = _fontBody;
 
             _shopSmallStyle = new GUIStyle(GUI.skin.label)
             {
@@ -530,6 +598,7 @@ namespace CoralCascade
                 alignment = TextAnchor.MiddleLeft
             };
             _shopSmallStyle.normal.textColor = SoftTeal;
+            if (_fontBody != null) _shopSmallStyle.font = _fontBody;
 
             // Home-page section cards: two-line rich text ("<b>Title</b>\nprogress"),
             // left-aligned like a real list card, right padding reserves the chevron slot.
@@ -707,10 +776,33 @@ namespace CoralCascade
                             ScaleMode.StretchToFill);
             DrawSunRays();
 
-            if (_menuPage == MenuPage.Home) { DrawHomePage(); return; }
-            if (_menuPage == MenuPage.Reef) { DrawReefPage(); return; }
+            // Page transition: the incoming page slides up out of the water and fades in.
+            // Only the CONTENT animates — the backdrop above stays put, so it reads as
+            // pages moving over the lagoon, not the world lurching.
+            if (_menuPage != _lastDrawnPage)
+            {
+                _lastDrawnPage = _menuPage;
+                _pageShownAt = Time.unscaledTime;
+            }
+            float pageT = Mathf.Clamp01((Time.unscaledTime - _pageShownAt) / 0.28f);
+            var pageMatrix = GUI.matrix;
+            var pageColor = GUI.color;
+            if (pageT < 1f)
+            {
+                GUI.matrix = Matrix4x4.Translate(
+                    new Vector3(0f, (1f - EaseOutBack(pageT)) * 30f * _scale, 0f)) * GUI.matrix;
+                GUI.color = new Color(1f, 1f, 1f, 0.25f + 0.75f * pageT);
+            }
+            if (_menuPage == MenuPage.Home) DrawHomePage();
+            else if (_menuPage == MenuPage.Reef) DrawReefPage();
+            else DrawSectionMapPage();
+            GUI.matrix = pageMatrix;
+            GUI.color = pageColor;
+        }
 
-            // ---- Section route page: Back + section title, then the winding path ----
+        /// <summary>The section route page: Back + section title, then the winding path.</summary>
+        private void DrawSectionMapPage()
+        {
             if (DrawBackButton())
                 return;
             DrawLabelShadowed(new Rect(0, 12f * _scale, Screen.width, 40f * _scale), Active.Title, _titleStyle);
@@ -1414,6 +1506,28 @@ namespace CoralCascade
             GUI.color = old;
         }
 
+        /// <summary>
+        /// A pack fish tops the end panel: bright and bouncing on a win, grey-tinted and
+        /// sunk low on a loss. Null-safe — no fish if the art pack is missing. Animated
+        /// with rect offsets only (GUI.matrix tricks misbehave inside a BeginArea).
+        /// </summary>
+        private void DrawEndFish(bool won)
+        {
+            var s = BubbleArt.Get(won ? "fish_orange" : "fish_blue");
+            if (s == null) return;
+            Rect slot = GUILayoutUtility.GetRect(1f, 54f * _scale, GUILayout.ExpandWidth(true));
+            float w = 66f * _scale;
+            float h = w * (s.rect.height / s.rect.width);
+            float t = Time.unscaledTime;
+            float bob = won ? Mathf.Sin(t * 2.4f) * 4f * _scale : 3f * _scale; // winners bounce
+            float pulse = won ? 1f + 0.05f * Mathf.Sin(t * 4.8f) : 1f;
+            var r = new Rect(slot.x + (slot.width - w * pulse) * 0.5f,
+                             slot.y + (slot.height - h * pulse) * 0.5f + bob,
+                             w * pulse, h * pulse);
+            // Winners face the sun; losers droop grey-blue.
+            DrawSpriteGUI(r, s, !won, won ? Color.white : new Color(0.62f, 0.72f, 0.80f));
+        }
+
         private void DrawPauseOverlay()
         {
             _modalOpen = true;
@@ -1457,10 +1571,13 @@ namespace CoralCascade
             int buttons = won ? ((hasNext || introFinished) ? 3 : 2) : 2;
             float starRowH = won ? 88f * _scale : 0f; // stars + target line + pearls line
             float bonusRowH = won && _endShotsLeft > 0 ? 22f * _scale : 0f;
-            BeginPanel(w, 168f * _scale + starRowH + bonusRowH + buttons * (btnH + 10f * _scale), openT);
+            float fishRowH = BubbleArt.Get(won ? "fish_orange" : "fish_blue") != null ? 54f * _scale : 0f;
+            BeginPanel(w, 168f * _scale + starRowH + bonusRowH + fishRowH
+                          + buttons * (btnH + 10f * _scale), openT);
             string loseTitle = _manager.PressureLoss ? "THE TIDE ROSE!" : "OUT OF SHOTS";
             string loseSub = _manager.PressureLoss ? "The reef crossed the danger line."
                                                    : "The bubbles won this round.";
+            DrawEndFish(won);
             GUILayout.Label(won ? "LEVEL CLEAR!" : loseTitle, _overlayTitleStyle);
             GUILayout.Label(won ? "The reef breathes again." : loseSub, _subtitleStyle);
             GUILayout.Space(6f * _scale);
