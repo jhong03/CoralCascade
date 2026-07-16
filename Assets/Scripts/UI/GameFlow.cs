@@ -649,16 +649,17 @@ namespace CoralCascade
 
             // Compact shop-row buttons: smaller type + tighter padding than the main
             // buttons, so the item-name column keeps real width on narrow screens.
+            // Sized for a ~370-logical-point phone: icon + name + Sell + Buy must all fit.
             _buyStyle = new GUIStyle(_buttonStyle)
             {
-                fontSize = (int)(15 * _scale),
-                padding = new RectOffset((int)(10 * _scale), (int)(10 * _scale), 0,
+                fontSize = (int)(13 * _scale),
+                padding = new RectOffset((int)(7 * _scale), (int)(7 * _scale), 0,
                                          _btnRedUp != null ? (int)(4 * _scale) : 0)
             };
             _sellStyle = new GUIStyle(_tabStyle)
             {
-                fontSize = (int)(15 * _scale),
-                padding = new RectOffset((int)(10 * _scale), (int)(10 * _scale), 0, 0)
+                fontSize = (int)(13 * _scale),
+                padding = new RectOffset((int)(7 * _scale), (int)(7 * _scale), 0, 0)
             };
             // A step under _barLabelStyle so the longest names fit the tightest column.
             _shopNameStyle = new GUIStyle(_barLabelStyle) { fontSize = (int)(14 * _scale) };
@@ -703,7 +704,8 @@ namespace CoralCascade
             _shopSmallStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = (int)(12 * _scale),
-                alignment = TextAnchor.MiddleLeft
+                alignment = TextAnchor.MiddleLeft,
+                wordWrap = false // single-line captions clip, never stack into neighbors
             };
             _shopSmallStyle.normal.textColor = SoftTeal;
             if (_fontBody != null) _shopSmallStyle.font = _fontBody;
@@ -824,6 +826,21 @@ namespace CoralCascade
         }
 
         /// <summary>
+        /// Shadowed label that SHRINKS ITS FONT until the text fits the rect width —
+        /// page titles must never wrap or collide with the corner buttons on narrow
+        /// portrait screens. Mutates-and-restores the style's font size.
+        /// </summary>
+        private void DrawLabelShadowedFit(Rect r, string text, GUIStyle style)
+        {
+            int baseSize = style.fontSize;
+            var content = new GUIContent(text);
+            while (style.fontSize > 12 && style.CalcSize(content).x > r.width)
+                style.fontSize--;
+            DrawLabelShadowed(r, text, style);
+            style.fontSize = baseSize;
+        }
+
+        /// <summary>
         /// Label with a soft drop shadow (drawn twice) — the only way IMGUI text gets any
         /// depth on the bright water backdrop. Mutates-and-restores the style's text color.
         /// </summary>
@@ -926,12 +943,16 @@ namespace CoralCascade
         /// <summary>The section route page: Back + section title, then the winding path.</summary>
         private void DrawSectionMapPage()
         {
+            // Two-row header: Back + pearl chip on top, title on its own line below
+            // (side by side they collided on phone widths).
             if (DrawBackButton())
                 return;
-            DrawLabelShadowed(new Rect(0, 12f * _scale, Screen.width, 40f * _scale), Active.Title, _titleStyle);
             DrawPearlChip();
+            DrawLabelShadowedFit(new Rect(12f * _scale, 56f * _scale,
+                                          Screen.width - 24f * _scale, 40f * _scale),
+                                 Active.Title, _titleStyle);
 
-            float mapTop = 68f * _scale;
+            float mapTop = 102f * _scale;
             var mapRect = new Rect(0, mapTop, Screen.width, Screen.height - mapTop);
             float spacing = 112f * _scale;
             float nodeSize = 68f * _scale;
@@ -1086,20 +1107,24 @@ namespace CoralCascade
             }
             GUI.color = oldColor;
 
-            // Title pops in with the bubble curve, then floats.
+            // Title pops in with the bubble curve, then floats. Fit-drawn: it must stay
+            // ONE line on every width (it wrapped and clipped on portrait phones).
             float appear = Mathf.Clamp01(t / 0.7f);
             float bob = Mathf.Sin(t * 1.3f) * 4f * _scale;
-            var titleRect = new Rect(0, Screen.height * 0.32f + bob, Screen.width, 64f * _scale);
+            var titleRect = new Rect(14f * _scale, Screen.height * 0.32f + bob,
+                                     Screen.width - 28f * _scale, 64f * _scale);
             var m = GUI.matrix;
             GUIUtility.ScaleAroundPivot(Vector2.one * Mathf.Max(0.01f, EaseOutBack(appear)),
                                         titleRect.center);
-            DrawLabelShadowed(titleRect, "CORAL CASCADE", _introTitleStyle);
+            DrawLabelShadowedFit(titleRect, "CORAL CASCADE", _introTitleStyle);
             GUI.matrix = m;
 
             float subA = Mathf.Clamp01((t - 0.55f) / 0.5f);
+            string tagline = "pop bubbles · ride the cascade · grow your reef";
+            float tagH = _subtitleStyle.CalcHeight(new GUIContent(tagline), Screen.width - 40f * _scale);
             GUI.color = new Color(1f, 1f, 1f, subA);
-            GUI.Label(new Rect(0, titleRect.yMax + 4f * _scale, Screen.width, 26f * _scale),
-                      "pop bubbles · ride the cascade · grow your reef", _subtitleStyle);
+            GUI.Label(new Rect(20f * _scale, titleRect.yMax + 4f * _scale,
+                               Screen.width - 40f * _scale, tagH), tagline, _subtitleStyle);
             GUI.color = oldColor;
 
             // The tap prompt breathes once the title has settled.
@@ -1130,15 +1155,17 @@ namespace CoralCascade
         /// <summary>The main menu: title, daily banner, then one big card per destination.</summary>
         private void DrawHomePage()
         {
-            // The title bobs gently like it's floating — subtle, but the page feels alive.
-            float bob = Mathf.Sin(Time.unscaledTime * 1.1f) * 2.5f * _scale;
-            DrawLabelShadowed(new Rect(0, 24f * _scale + bob, Screen.width, 48f * _scale),
-                              "CORAL CASCADE", _titleStyle);
-            GUI.Label(new Rect(0, 72f * _scale + bob, Screen.width, 24f * _scale),
-                      "Choose your waters", _subtitleStyle);
+            // Two-row header: the pearl chip owns the top strip, the title sits BELOW it
+            // (side by side they collided on phone widths). The title bobs gently.
             DrawPearlChip();
+            float bob = Mathf.Sin(Time.unscaledTime * 1.1f) * 2.5f * _scale;
+            DrawLabelShadowedFit(new Rect(12f * _scale, 50f * _scale + bob,
+                                          Screen.width - 24f * _scale, 44f * _scale),
+                                 "CORAL CASCADE", _titleStyle);
+            GUI.Label(new Rect(0, 96f * _scale + bob, Screen.width, 24f * _scale),
+                      "Choose your waters", _subtitleStyle);
 
-            float y = 128f * _scale;
+            float y = 134f * _scale;
             y += DrawDailyBanner(y) + 6f * _scale;
 
             // The section whose frontier the player should chase glows sunshine.
@@ -1155,7 +1182,7 @@ namespace CoralCascade
                     _menuPage = MenuPage.SectionMap;
                 }
             }
-            if (DrawMenuCard(ref y, "My Reef", "your aquarium — spend pearls, watch it grow", false))
+            if (DrawMenuCard(ref y, "My Reef", "spend pearls, watch it grow", false))
             {
                 _menuPage = MenuPage.Reef;
                 _shopOpen = false;
@@ -1166,11 +1193,14 @@ namespace CoralCascade
 
         private void DrawReefPage()
         {
+            // Same two-row header as the route page: utility row, then the title line.
             if (DrawBackButton())
                 return;
-            DrawLabelShadowed(new Rect(0, 12f * _scale, Screen.width, 40f * _scale), "My Reef", _titleStyle);
             DrawPearlChip();
-            float top = 68f * _scale;
+            DrawLabelShadowedFit(new Rect(12f * _scale, 56f * _scale,
+                                          Screen.width - 24f * _scale, 40f * _scale),
+                                 "My Reef", _titleStyle);
+            float top = 102f * _scale;
             DrawReefTank(new Rect(0, top, Screen.width, Screen.height - top));
         }
 
@@ -1255,9 +1285,12 @@ namespace CoralCascade
 
             int best = HighScores.Get(_dailyLayout.Name);
             bool cleared = best > 0;
+            // Measured label: the long form clipped at BOTH ends on phone widths.
             string label = cleared
                 ? $"DAILY REEF  ·  cleared!  Best {best}"
                 : $"DAILY REEF  ·  {_dailyDate:MMM d}  ·  a fresh challenge!";
+            if (ButtonW(label, cleared ? _tabStyle : _tabActiveStyle) > w - 80f * _scale)
+                label = cleared ? $"DAILY  ·  Best {best}" : $"DAILY REEF  ·  {_dailyDate:MMM d}";
 
             bool swiping = _dragDistance > 15f; // same guard as map nodes: swipes never tap
             GUI.enabled = !swiping;
@@ -1371,20 +1404,22 @@ namespace CoralCascade
                                    shopW, 40f * _scale);
             if (GUI.Button(shopBtn, _shopOpen ? "Close Shop" : "Reef Shop", _buttonStyle))
                 _shopOpen = !_shopOpen;
-            GUI.Label(new Rect(shopBtn.xMax + 14f * _scale, area.y + 4f * _scale,
-                               area.width - shopBtn.width - 40f * _scale, 24f * _scale),
+            // Rare-fish goals get their own FULL-WIDTH lines under the button — squeezed
+            // beside it on phone widths, they wrapped over each other into mush.
+            GUI.Label(new Rect(area.x + 12f * _scale, shopBtn.yMax + 4f * _scale,
+                               area.width - 24f * _scale, 22f * _scale),
                       _goldenUnlocked ? "Golden Puffer — UNLOCKED!"
-                                      : "Golden Puffer — 3-star all of Tutorial Reef",
+                                      : "Golden Puffer — 3-star all Tutorial reefs",
                       _shopSmallStyle);
-            GUI.Label(new Rect(shopBtn.xMax + 14f * _scale, area.y + 26f * _scale,
-                               area.width - shopBtn.width - 40f * _scale, 24f * _scale),
+            GUI.Label(new Rect(area.x + 12f * _scale, shopBtn.yMax + 26f * _scale,
+                               area.width - 24f * _scale, 22f * _scale),
                       _pearlEelUnlocked ? "Pearl Eel — UNLOCKED!"
                                         : "Pearl Eel — 3-star any 10 Adventure reefs",
                       _shopSmallStyle);
             if (owned > 0)
                 GUI.Label(new Rect(area.x + 12f * _scale, area.yMax - 24f * _scale,
                                    area.width - 24f * _scale, 22f * _scale),
-                          "Tip: drag corals, rocks and vents to arrange your reef",
+                          "Tip: drag decor to arrange your reef",
                           _shopSmallStyle);
 
             if (_shopOpen)
@@ -1416,7 +1451,7 @@ namespace CoralCascade
             float px2unit = w / unitW;
             float hgt = unitH * px2unit;
 
-            float laneTop = area.y + 64f * _scale;
+            float laneTop = area.y + 108f * _scale; // clear of the shop button + goal lines
             float laneBottom = sandTop - 40f * _scale - hgt;
             float laneY = Mathf.Lerp(laneTop, Mathf.Max(laneTop, laneBottom), Frac(h * 0.7548f));
 

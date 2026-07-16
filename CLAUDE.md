@@ -283,6 +283,14 @@ Arial, so fixed-width text buttons MUST size via `GameFlow.ButtonW(text, style, 
 sizes to the longer of both labels; shop Buy/Sell columns take the catalog-wide max so
 rows align; Back/Debug/Pause sized the same way. Tab-style font stepped down to
 16·scale (secondary actions, incl. the daily banner's long label).
+PORTRAIT MENU SWEEP (user-reported, 5 screenshots): all menu pages now use a TWO-ROW
+header (Back/pearl-chip strip on top, title on its own line via `DrawLabelShadowedFit` —
+shrinks font until one line fits; splash title fit-drawn too); route-map/tank content
+starts at 102·scale. Daily banner label is measured with a short fallback ("DAILY ·
+Best N"). My Reef: rare-goal lines are FULL-WIDTH under the shop button (beside it they
+wrapped over each other), fish lanes start 108·scale down, tip shortened; shopSmall
+wordWrap=false. Shop Sell/Buy slimmed to 13·scale/7·scale pads so the Buy column fits
+the row budget. My Reef card sub shortened.
 HUD-WIDTH LESSON (user-reported on the first true-portrait test: level label crushed to
 a vertical sliver, Debug/Pause pushed off-screen): a 1080-wide portrait phone is only
 ~370 LOGICAL points across (scale ≈ 2.9) — budget the whole row in logical points before
