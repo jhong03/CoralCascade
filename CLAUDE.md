@@ -338,6 +338,16 @@ Diagrams (`DrawStoneDiagram`/`DrawIceDiagram`/`DrawTideDiagram`) loop on unscale
 procedural orbs + rock_a (null-safe fallback grey orb), rect-offset animation only (no
 GUI.matrix inside the panel area). RestartLevel re-queues (no-op once seen).
 
+**Settings page (2026-07-16, user request):** `MenuPage.Settings`, entered via a
+"Settings" button top-LEFT on Home (mirrors the pearl chip), two-row header like every
+sub-page. Contains ONLY wired options (deliberate: no audio toggles until audio exists —
+dead switches are worse than none): screen-shake ON/OFF (`GameSettings.ShakeEnabled` in
+Data/Scoring.cs, gated at the single `PopEffects.Shake` entry point), "Replay mechanic
+guides" (`TutorialFlags.ResetAll`, ids single-sourced in `TutorialFlags.AllIds`),
+"Reset ALL progress" (two-tap confirm, arms for 3s, `PlayerPrefs.DeleteAll` — wipes
+settings too, defaults return; section MapOffsets re-sentineled), transient feedback
+notes, Kenney credits at the bottom.
+
 Pack shortlist (researched 2026-07-14):
 - **Kenney Fish Pack** (kenney.nl/assets/fish-pack, CC0, 120 vector sea creatures/tiles) —
   DONE for balls; seaweed/terrain/background_* decor + hud_number_* digits still unused.

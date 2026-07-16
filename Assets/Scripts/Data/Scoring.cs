@@ -161,6 +161,9 @@ namespace CoralCascade
     /// </summary>
     public static class TutorialFlags
     {
+        /// <summary>Every mechanic id that has a tutorial card.</summary>
+        public static readonly string[] AllIds = { "Stone", "Ice", "Tide" };
+
         private static string Key(string id) => "CoralCascade.Tutorial." + id;
 
         public static bool Seen(string id) => PlayerPrefs.GetInt(Key(id), 0) == 1;
@@ -169,6 +172,31 @@ namespace CoralCascade
         {
             PlayerPrefs.SetInt(Key(id), 1);
             PlayerPrefs.Save();
+        }
+
+        /// <summary>Forgets every seen-flag so the guides show again (Settings page).</summary>
+        public static void ResetAll()
+        {
+            foreach (var id in AllIds)
+                PlayerPrefs.DeleteKey(Key(id));
+            PlayerPrefs.Save();
+        }
+    }
+
+    /// <summary>
+    /// Player-facing options (the Settings page). PlayerPrefs like everything else.
+    /// Only REAL, wired options live here — no placeholder toggles for systems that
+    /// don't exist yet (audio adds its own entries when it lands).
+    /// </summary>
+    public static class GameSettings
+    {
+        private const string ShakeKey = "CoralCascade.Set.Shake";
+
+        /// <summary>Camera shake on big pops/cascades. Read by PopEffects.Shake.</summary>
+        public static bool ShakeEnabled
+        {
+            get => PlayerPrefs.GetInt(ShakeKey, 1) == 1;
+            set { PlayerPrefs.SetInt(ShakeKey, value ? 1 : 0); PlayerPrefs.Save(); }
         }
     }
 }

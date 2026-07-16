@@ -23,7 +23,7 @@ namespace CoralCascade
         /// nothing ever navigates back to it); Home = big section cards + daily banner;
         /// SectionMap = one section's winding route with a Back button; Reef = aquarium.
         /// </summary>
-        private enum MenuPage { Intro, Home, SectionMap, Reef }
+        private enum MenuPage { Intro, Home, SectionMap, Reef, Settings }
 
         /// <summary>
         /// One tab of the level map with its own level list and its own progression chain.
@@ -75,6 +75,12 @@ namespace CoralCascade
         // only the player's "Got it" dismisses — it never times out or fades on its own.
         private readonly List<string> _pendingTutorials = new List<string>();
         private float _tutorialShownAt;
+
+        // Settings page: destructive reset needs a second tap while armed; small feedback
+        // notes ("Guides will show again.") linger for a moment under the buttons.
+        private float _resetArmedUntil;
+        private string _settingsNote;
+        private float _settingsNoteUntil;
 
         // My Reef aquarium page (roadmap step 5) — purely cosmetic, see ReefStore.
         private bool _shopOpen;
@@ -935,6 +941,7 @@ namespace CoralCascade
             if (_menuPage == MenuPage.Intro) DrawIntroPage();
             else if (_menuPage == MenuPage.Home) DrawHomePage();
             else if (_menuPage == MenuPage.Reef) DrawReefPage();
+            else if (_menuPage == MenuPage.Settings) DrawSettingsPage();
             else DrawSectionMapPage();
             GUI.matrix = pageMatrix;
             GUI.color = pageColor;
@@ -1158,6 +1165,14 @@ namespace CoralCascade
             // Two-row header: the pearl chip owns the top strip, the title sits BELOW it
             // (side by side they collided on phone widths). The title bobs gently.
             DrawPearlChip();
+            if (GUI.Button(new Rect(12f * _scale, 12f * _scale,
+                                    ButtonW("Settings", _tabStyle), 30f * _scale),
+                           "Settings", _tabStyle))
+            {
+                _menuPage = MenuPage.Settings;
+                _resetArmedUntil = 0f;
+                _settingsNote = null;
+            }
             float bob = Mathf.Sin(Time.unscaledTime * 1.1f) * 2.5f * _scale;
             DrawLabelShadowedFit(new Rect(12f * _scale, 50f * _scale + bob,
                                           Screen.width - 24f * _scale, 44f * _scale),
@@ -1202,6 +1217,80 @@ namespace CoralCascade
                                  "My Reef", _titleStyle);
             float top = 102f * _scale;
             DrawReefTank(new Rect(0, top, Screen.width, Screen.height - top));
+        }
+
+        /// <summary>
+        /// The Settings page: only REAL, wired options (screen shake, replaying the
+        /// mechanic guides, full progress reset with a two-tap confirm) plus art credits.
+        /// No audio toggles until an audio system exists — dead switches are worse than
+        /// none. Same two-row header pattern as every other sub-page.
+        /// </summary>
+        private void DrawSettingsPage()
+        {
+            if (DrawBackButton())
+                return;
+            DrawLabelShadowedFit(new Rect(12f * _scale, 56f * _scale,
+                                          Screen.width - 24f * _scale, 40f * _scale),
+                                 "Settings", _titleStyle);
+
+            float w = Mathf.Min(430f * _scale, Screen.width - 24f * _scale);
+            float x = (Screen.width - w) * 0.5f;
+            float y = 116f * _scale;
+
+            // ---- Screen shake toggle ----
+            var rowRect = new Rect(x, y, w, 56f * _scale);
+            GUI.DrawTexture(rowRect, PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.45f)));
+            GUI.Label(new Rect(rowRect.x + 18f * _scale, rowRect.y, rowRect.width * 0.55f,
+                               rowRect.height), "Screen shake", _tutTitleStyle);
+            bool shakeOn = GameSettings.ShakeEnabled;
+            float togW = Mathf.Max(ButtonW("ON", _tabActiveStyle), ButtonW("OFF", _tabStyle));
+            if (GUI.Button(new Rect(rowRect.xMax - togW - 10f * _scale, rowRect.y + 8f * _scale,
+                                    togW, 40f * _scale),
+                           shakeOn ? "ON" : "OFF", shakeOn ? _tabActiveStyle : _tabStyle))
+                GameSettings.ShakeEnabled = !shakeOn;
+            y += 68f * _scale;
+
+            // ---- Replay the mechanic guides ----
+            if (GUI.Button(new Rect(x, y, w, 50f * _scale), "Replay mechanic guides", _tabStyle))
+            {
+                TutorialFlags.ResetAll();
+                _settingsNote = "The Stone / Ice / Tide guides will show again.";
+                _settingsNoteUntil = Time.unscaledTime + 3f;
+            }
+            y += 62f * _scale;
+
+            // ---- Reset progress (armed two-tap confirm; disarms after 3s) ----
+            bool armed = Time.unscaledTime < _resetArmedUntil;
+            if (GUI.Button(new Rect(x, y, w, 50f * _scale),
+                           armed ? "Tap again to ERASE everything" : "Reset ALL progress",
+                           _buttonStyle))
+            {
+                if (!armed)
+                {
+                    _resetArmedUntil = Time.unscaledTime + 3f;
+                }
+                else
+                {
+                    PlayerPrefs.DeleteAll(); // scores, stars, pearls, reef, unlocks, flags
+                    PlayerPrefs.Save();
+                    _resetArmedUntil = 0f;
+                    foreach (var s in _sections) s.MapOffset = -1f;
+                    _settingsNote = "All progress erased. The reef is new again.";
+                    _settingsNoteUntil = Time.unscaledTime + 3f;
+                }
+            }
+            y += 62f * _scale;
+
+            if (_settingsNote != null && Time.unscaledTime < _settingsNoteUntil)
+                GUI.Label(new Rect(x, y, w, 40f * _scale), _settingsNote, _subtitleStyle);
+
+            // ---- Credits (Kenney is CC0; credit is a courtesy, not an obligation) ----
+            string credits = "Art: Kenney Fish Pack & UI Pack — kenney.nl (CC0)";
+            float creditsH = _subtitleStyle.CalcHeight(new GUIContent(credits), w);
+            GUI.Label(new Rect(x, Screen.height - creditsH - 40f * _scale, w, creditsH),
+                      credits, _subtitleStyle);
+            GUI.Label(new Rect(x, Screen.height - 32f * _scale, w, 24f * _scale),
+                      "Coral Cascade — prototype", _subtitleStyle);
         }
 
         /// <summary>Top-left Back button shared by the sub-pages. True if it navigated.</summary>

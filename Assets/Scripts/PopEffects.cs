@@ -138,8 +138,13 @@ namespace CoralCascade
             Ring(pos, new Color(icy.r, icy.g, icy.b, 0.8f), 0.22f, 0.9f);
         }
 
-        /// <summary>Camera kick (max of pending shakes; decays on scaled time).</summary>
-        public void Shake(float amount) => _shake = Mathf.Max(_shake, amount);
+        /// <summary>Camera kick (max of pending shakes; decays on scaled time).
+        /// Honors the player's screen-shake setting — this is the single entry point.</summary>
+        public void Shake(float amount)
+        {
+            if (!GameSettings.ShakeEnabled) return;
+            _shake = Mathf.Max(_shake, amount);
+        }
 
         /// <summary>
         /// Big praise text ("BIG COMBO!!") centered above the board: pops in with an
