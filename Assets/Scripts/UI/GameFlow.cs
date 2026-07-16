@@ -70,6 +70,12 @@ namespace CoralCascade
         private MenuPage _menuPage = MenuPage.Intro; // boot lands on the launch splash
         private float _introShownAt; // staggers the splash animation + guards instant skips
 
+        // First-encounter mechanic tutorials (Stone / Ice / Tide): queued when a loaded
+        // level contains a mechanic the player has never met, drawn as a MODAL card that
+        // only the player's "Got it" dismisses — it never times out or fades on its own.
+        private readonly List<string> _pendingTutorials = new List<string>();
+        private float _tutorialShownAt;
+
         // My Reef aquarium page (roadmap step 5) — purely cosmetic, see ReefStore.
         private bool _shopOpen;
         private Vector2 _shopScroll;
@@ -117,6 +123,7 @@ namespace CoralCascade
         private GUIStyle _chipStyle, _chipUrgentStyle, _nodeTextStyle, _chevronStyle, _rowStyle;
         private GUIStyle _buyStyle, _sellStyle, _shopNameStyle;
         private GUIStyle _introTitleStyle, _introPromptStyle;
+        private GUIStyle _tutTitleStyle, _tutBodyStyle;
         private float _scale;
         private bool _stylesReady;
         private Matrix4x4 _panelMatrix; // saved by BeginPanel (pop-in scale), restored by EndPanel
@@ -321,8 +328,39 @@ namespace CoralCascade
             _paused = false;
             _endSeen = false;
             _manager.LoadLayout(level); // resets timescale, cascade, projectiles
-            _splashUntil = Time.unscaledTime + SplashSeconds; // show the star targets up front
+            QueueMechanicTutorials(level);
+            // The star-target splash waits its turn: it starts when the tutorial closes.
+            _splashUntil = _pendingTutorials.Count > 0 ? 0f : Time.unscaledTime + SplashSeconds;
             _screen = FlowScreen.Playing;
+        }
+
+        /// <summary>
+        /// Detects mechanics in the LOADED LEVEL DATA that the player has never met and
+        /// queues their tutorial cards. Data-driven (chars + pressure field), so it works
+        /// identically for authored intros, generated reefs and Dailies.
+        /// </summary>
+        private void QueueMechanicTutorials(BoardLayoutData layout)
+        {
+            _pendingTutorials.Clear();
+            if (layout == null) return;
+
+            bool stone = false, ice = false;
+            if (layout.CellRows != null)
+            {
+                foreach (var row in layout.CellRows)
+                {
+                    if (row == null) continue;
+                    foreach (char ch in row)
+                    {
+                        if (BubbleColorExtensions.FromChar(ch) == BubbleColor.Stone) stone = true;
+                        else if (char.IsLower(ch) && BubbleColorExtensions.FromChar(ch).IsPlayable()) ice = true;
+                    }
+                }
+            }
+            if (stone && !TutorialFlags.Seen("Stone")) _pendingTutorials.Add("Stone");
+            if (ice && !TutorialFlags.Seen("Ice")) _pendingTutorials.Add("Ice");
+            if (layout.PressureEveryShots > 0 && !TutorialFlags.Seen("Tide")) _pendingTutorials.Add("Tide");
+            if (_pendingTutorials.Count > 0) _tutorialShownAt = Time.unscaledTime;
         }
 
         private void Pause()
@@ -347,7 +385,8 @@ namespace CoralCascade
             _paused = false;
             _endSeen = false;
             _manager.LoadLayout(_manager.CurrentLayout); // sets timescale back to 1 itself
-            _splashUntil = Time.unscaledTime + SplashSeconds;
+            QueueMechanicTutorials(_manager.CurrentLayout); // no-op once flags are seen
+            _splashUntil = _pendingTutorials.Count > 0 ? 0f : Time.unscaledTime + SplashSeconds;
         }
 
         /// <summary>Back to the map, landing on the given section's tab (default: the one just played).</summary>
@@ -631,6 +670,24 @@ namespace CoralCascade
             _introPromptStyle.normal.textColor = Color.white;
             if (_fontDisplay != null) { _introPromptStyle.font = _fontDisplay; _introPromptStyle.fontStyle = FontStyle.Normal; }
 
+            // Mechanic-tutorial card: bold section titles, wrapped body copy, all left-set.
+            _tutTitleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = (int)(17 * _scale),
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleLeft
+            };
+            _tutTitleStyle.normal.textColor = DeepTeal;
+            if (_fontDisplay != null) { _tutTitleStyle.font = _fontDisplay; _tutTitleStyle.fontStyle = FontStyle.Normal; }
+            _tutBodyStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = (int)(13 * _scale),
+                alignment = TextAnchor.UpperLeft,
+                wordWrap = true
+            };
+            _tutBodyStyle.normal.textColor = SoftTeal;
+            if (_fontBody != null) _tutBodyStyle.font = _fontBody;
+
             _meterLabelStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = (int)(13 * _scale),
@@ -698,7 +755,11 @@ namespace CoralCascade
 
             DrawTopBar();
 
-            if (!_paused && !_endSeen && Time.unscaledTime < _splashUntil)
+            bool tutorialOpen = _pendingTutorials.Count > 0 && !_paused && !_endSeen;
+            if (tutorialOpen)
+                DrawMechanicTutorial();
+
+            if (!_paused && !_endSeen && !tutorialOpen && Time.unscaledTime < _splashUntil)
                 DrawTargetSplash();
 
             if (_paused)
@@ -1672,6 +1733,173 @@ namespace CoralCascade
             GUI.Label(new Rect(rect.x, rect.y + 74f * _scale, rect.width, 22f * _scale),
                       "Clear the reef to earn your first star!", _subtitleStyle);
             GUI.matrix = oldMatrix;
+            GUI.color = old;
+        }
+
+        // ---- First-encounter mechanic tutorial (modal, player-dismissed only) -----------------
+
+        /// <summary>
+        /// The "new mechanic" card: one animated diagram + explanation per newly-met
+        /// mechanic, and a single Got-it button. Deliberately NOT self-dismissing (user
+        /// requirement): it stays until the player closes it, and only closing marks the
+        /// mechanics as seen. Modal — aiming is blocked while it's up.
+        /// </summary>
+        private void DrawMechanicTutorial()
+        {
+            _modalOpen = true;
+            float openT = Mathf.Clamp01((Time.unscaledTime - _tutorialShownAt) / PanelPopSeconds);
+            FillScreen(new Color(0f, 0.20f, 0.30f, 0.45f * openT));
+
+            float w = Mathf.Min(410f * _scale, Screen.width - 50f);
+            float btnH = 50f * _scale;
+            float sectionH = 118f * _scale;
+            BeginPanel(w, 52f * _scale + _pendingTutorials.Count * (sectionH + 8f * _scale)
+                          + btnH + 20f * _scale, openT);
+            GUILayout.Label(_pendingTutorials.Count > 1 ? "NEW DISCOVERIES!" : "NEW DISCOVERY!",
+                            _overlayTitleStyle);
+            GUILayout.Space(8f * _scale);
+            foreach (var key in _pendingTutorials)
+            {
+                DrawTutorialSection(key, sectionH);
+                GUILayout.Space(8f * _scale);
+            }
+            GUILayout.Space(6f * _scale);
+            if (GUILayout.Button("Got it — let's play!", _buttonStyle, GUILayout.Height(btnH)))
+            {
+                foreach (var key in _pendingTutorials) TutorialFlags.MarkSeen(key);
+                _pendingTutorials.Clear();
+                _splashUntil = Time.unscaledTime + SplashSeconds; // star targets take the stage next
+            }
+            EndPanel();
+        }
+
+        /// <summary>One tutorial row: animated diagram on a light stage, title + copy right.</summary>
+        private void DrawTutorialSection(string key, float h)
+        {
+            var row = GUILayoutUtility.GetRect(1f, h, GUILayout.ExpandWidth(true));
+            float pad = 4f * _scale;
+            var stage = new Rect(row.x + pad, row.y + pad, 108f * _scale, h - pad * 2f);
+            var text = new Rect(stage.xMax + 12f * _scale, row.y + pad,
+                                row.xMax - stage.xMax - 16f * _scale, h - pad * 2f);
+
+            var old = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, 0.75f);
+            GUI.DrawTexture(stage, PrimitiveSprites.RoundedRect(new Color(0.72f, 0.92f, 0.98f)));
+            GUI.color = old;
+
+            string title, body;
+            switch (key)
+            {
+                case "Stone":
+                    title = "Stone bubbles";
+                    body = "Stones are too heavy to match — shots never pop them.\n" +
+                           "Pop the bubbles HOLDING a stone and it sinks away!";
+                    DrawStoneDiagram(stage);
+                    break;
+                case "Ice":
+                    title = "Frozen bubbles";
+                    body = "Iced-over bubbles can't join a match.\n" +
+                           "Pop a match right beside the ice to thaw it free.";
+                    DrawIceDiagram(stage);
+                    break;
+                default:
+                    title = "The rising tide";
+                    body = "Every few shots the tide pushes the reef DOWN.\n" +
+                           "Bubbles crossing the red line flood the reef — watch the Tide chip!";
+                    DrawTideDiagram(stage);
+                    break;
+            }
+            GUI.Label(new Rect(text.x, text.y, text.width, 26f * _scale), title, _tutTitleStyle);
+            GUI.Label(new Rect(text.x, text.y + 28f * _scale, text.width, text.height - 28f * _scale),
+                      body, _tutBodyStyle);
+        }
+
+        /// <summary>Two green bubbles pop; the stone they held sinks. Loops forever.</summary>
+        private void DrawStoneDiagram(Rect r)
+        {
+            float t = Frac(Time.unscaledTime / 2.8f);
+            var orb = PrimitiveSprites.GlossyOrb().texture;
+            float d = r.width * 0.27f;
+            float y = r.y + r.height * 0.28f;
+            float x0 = r.x + (r.width - 3f * d) * 0.5f;
+
+            float popK = Mathf.Clamp01((t - 0.45f) / 0.12f); // greens shrink out
+            float fall = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((t - 0.62f) / 0.28f))
+                         * (r.yMax - y - d - 6f * _scale);
+            float fade = 1f - Mathf.Clamp01((t - 0.9f) / 0.1f);
+
+            var old = GUI.color;
+            float g = d * (1f - popK);
+            if (g > 1f)
+            {
+                GUI.color = new Color(0.30f, 0.85f, 0.45f);
+                GUI.DrawTexture(new Rect(x0 + (d - g) * 0.5f, y + (d - g) * 0.5f, g, g), orb);
+                GUI.DrawTexture(new Rect(x0 + 2f * d + (d - g) * 0.5f, y + (d - g) * 0.5f, g, g), orb);
+            }
+            var stoneRect = new Rect(x0 + d, y + fall, d, d);
+            var rock = BubbleArt.Get("rock_a");
+            GUI.color = new Color(1f, 1f, 1f, fade);
+            if (rock != null) DrawSpriteGUI(stoneRect, rock, false, new Color(1f, 1f, 1f, fade));
+            else { GUI.color = new Color(0.55f, 0.57f, 0.62f, fade); GUI.DrawTexture(stoneRect, orb); }
+            GUI.color = old;
+        }
+
+        /// <summary>A neighbor match pops and the frost melts off the frozen bubble. Loops.</summary>
+        private void DrawIceDiagram(Rect r)
+        {
+            float t = Frac(Time.unscaledTime / 2.8f);
+            var orb = PrimitiveSprites.GlossyOrb().texture;
+            var circle = PrimitiveSprites.Circle().texture;
+            float d = r.width * 0.30f;
+            float y = r.y + (r.height - d) * 0.5f;
+            float xGreen = r.x + r.width * 0.5f - d - 3f * _scale;
+            float xIce = r.x + r.width * 0.5f + 3f * _scale;
+
+            float popK = Mathf.Clamp01((t - 0.45f) / 0.12f);  // the neighbor match pops...
+            float thaw = Mathf.Clamp01((t - 0.60f) / 0.25f);  // ...and the frost melts off
+
+            var old = GUI.color;
+            float g = d * (1f - popK);
+            if (g > 1f)
+            {
+                GUI.color = new Color(0.30f, 0.85f, 0.45f);
+                GUI.DrawTexture(new Rect(xGreen + (d - g) * 0.5f, y + (d - g) * 0.5f, g, g), orb);
+            }
+            // Frozen bubble: washed-out blue that turns vivid as the frost layer fades.
+            GUI.color = Color.Lerp(new Color(0.72f, 0.86f, 0.95f), new Color(0.25f, 0.55f, 1f), thaw);
+            GUI.DrawTexture(new Rect(xIce, y, d, d), orb);
+            GUI.color = new Color(0.85f, 0.95f, 1f, 0.62f * (1f - thaw));
+            GUI.DrawTexture(new Rect(xIce, y, d, d), circle);
+            GUI.color = old;
+        }
+
+        /// <summary>A bubble row rides the tide down toward the pulsing red line. Loops.</summary>
+        private void DrawTideDiagram(Rect r)
+        {
+            float t = Frac(Time.unscaledTime / 3.2f);
+            var orb = PrimitiveSprites.GlossyOrb().texture;
+            float d = r.width * 0.22f;
+            float lineY = r.yMax - 12f * _scale;
+
+            // Three discrete tide steps (it shoves, it doesn't glide).
+            float steps = Mathf.Floor(t * 3f) + Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(Frac(t * 3f) * 5f));
+            float y = Mathf.Lerp(r.y + 8f * _scale, lineY - d - 2f * _scale, Mathf.Clamp01(steps / 3f));
+
+            Color[] tints = { new Color(0.35f, 0.78f, 1f), new Color(0.98f, 0.55f, 0.30f),
+                              new Color(0.30f, 0.85f, 0.45f) };
+            var old = GUI.color;
+            float x0 = r.x + (r.width - 3.3f * d) * 0.5f;
+            for (int i = 0; i < 3; i++)
+            {
+                GUI.color = tints[i];
+                GUI.DrawTexture(new Rect(x0 + i * 1.15f * d, y, d, d), orb);
+            }
+            // The danger line: red, pulsing harder as the bubbles close in.
+            float closeness = Mathf.Clamp01(steps / 3f);
+            GUI.color = new Color(1f, 0.25f, 0.25f,
+                                  0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 6f) * closeness);
+            GUI.DrawTexture(new Rect(r.x + 6f * _scale, lineY, r.width - 12f * _scale, 3f * _scale),
+                            _whiteTex);
             GUI.color = old;
         }
 

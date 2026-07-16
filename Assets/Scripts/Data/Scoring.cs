@@ -152,4 +152,23 @@ namespace CoralCascade
             return true;
         }
     }
+
+    /// <summary>
+    /// One-time "new mechanic" tutorial cards (stone / ice / tide): one flag per mechanic
+    /// so the card shows only on the player's FIRST encounter, in whatever level that
+    /// happens (tutorial board, Adventure reef, or a Daily). Marked seen when the player
+    /// dismisses the card — quitting with it open shows it again next time, on purpose.
+    /// </summary>
+    public static class TutorialFlags
+    {
+        private static string Key(string id) => "CoralCascade.Tutorial." + id;
+
+        public static bool Seen(string id) => PlayerPrefs.GetInt(Key(id), 0) == 1;
+
+        public static void MarkSeen(string id)
+        {
+            PlayerPrefs.SetInt(Key(id), 1);
+            PlayerPrefs.Save();
+        }
+    }
 }

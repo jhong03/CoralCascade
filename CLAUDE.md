@@ -302,6 +302,20 @@ end where teal drowns; title is `_introTitleStyle` 46·scale). Tap-anywhere adva
 lives in Update (PressedThisFrame, 0.4s guard so the app-launch tap can't skip it);
 leaving Intro rides the existing page slide-in transition. All unscaled time.
 
+**Mechanic tutorial cards (2026-07-16, user request):** first ENCOUNTER of Stone / Ice /
+Tide pops a modal card at level start — animated diagram + copy per mechanic, ONE
+"Got it — let's play!" button; per user requirement it NEVER auto-dismisses (unlike the
+target splash) and aiming is blocked while open (`_modalOpen`). Detection is DATA-driven
+in `GameFlow.QueueMechanicTutorials` (layout chars: Stone color / lowercase-playable
+frozen; `PressureEveryShots > 0`) so authored intros, generated reefs and Dailies all
+trigger it; a level meeting 2+ new mechanics stacks sections in one card. Seen-flags:
+`TutorialFlags` in Data/Scoring.cs (`CoralCascade.Tutorial.<Id>`), marked ONLY on
+dismissal (quit-with-card-open reshows next time, intended). The star-target splash
+defers until the card closes (`_splashUntil = 0` while queued, restarted on Got-it).
+Diagrams (`DrawStoneDiagram`/`DrawIceDiagram`/`DrawTideDiagram`) loop on unscaled time,
+procedural orbs + rock_a (null-safe fallback grey orb), rect-offset animation only (no
+GUI.matrix inside the panel area). RestartLevel re-queues (no-op once seen).
+
 Pack shortlist (researched 2026-07-14):
 - **Kenney Fish Pack** (kenney.nl/assets/fish-pack, CC0, 120 vector sea creatures/tiles) —
   DONE for balls; seaweed/terrain/background_* decor + hud_number_* digits still unused.
