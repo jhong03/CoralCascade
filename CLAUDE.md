@@ -3,6 +3,27 @@
 Mobile bubble shooter (Unity 6000.4.1f1, 2D URP, **new Input System only** — legacy `Input` throws).
 Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `CoralCascade_game_plan.md`.
 
+## Status (as of 2026-07-16)
+
+**2026-07-16 session (all pushed):** UI QUALITY OVERHAUL — two passes (procedural: star
+pips/candy buttons/HUD chips/pop-in overlays; then Kenney UI Pack: real fonts + 9-slice
+button plates + page transitions + end-screen fish mascot), LAUNCH SPLASH (tap-to-dismiss
+title intro), FIRST-ENCOUNTER MECHANIC TUTORIAL CARDS (Stone/Ice/Tide, player-dismissed
+modal), SETTINGS PAGE (shake toggle / replay guides / two-tap reset / credits),
+PORTRAIT-ONLY lock + a portrait layout sweep fixing many user-reported cutoffs (see the
+LESSONS entries in "Art direction" — the recurring theme: a phone is ~370 logical points
+wide; budget every row, measure every text). Test with a FIXED-RESOLUTION portrait Game
+view preset (1080x2340), not Aspect Ratio.
+**KNOWN OPEN BUG (backdrop):** in-level ReefBackdrop decor (plants/sand/swimmers) renders
+as PALE UNTEXTURED QUADS — world SpriteRenderers only; the SAME sprites via IMGUI
+(aquarium/splash) and a sorting-order-40 test row render fine; materials/import/scene/
+renderer-asset all verified healthy. Diagnosis incomplete (a mid-hunt swimmer-motion
+commit was rolled back via reset to 2b3d318). NEXT STEP: during Play, pause and click one
+pale shape in the Scene view — the Inspector tells us what it actually is.
+**Open mobile gaps (user aware, deferred):** camera frames from hardcoded 9:19.5 (21:9
+phones clip outer columns; tablets show a small board) + no Screen.safeArea insets.
+**Next session:** user picks — backdrop bug, camera framing/safe-area, or backlog below.
+
 ## Status (as of 2026-07-14)
 
 **Where we are:** Roadmap steps 1 (stars), 2 (stone/ice obstacles), and 3 (descending
@@ -15,8 +36,6 @@ art direction agreed + **gameplay bubble art integrated** (see "Art direction" b
 pass** (user: game felt "dark and depressing"; all 4 proposed fixes approved & built —
 sunlit color flip, `ReefBackdrop.cs` living decor, bright IMGUI skin, lagoon map screen).
 All compile-verified (25 files).
-**Next: roadmap step 3 — descending pressure** (board pushes down every N shots, lose when
-bubbles cross a danger line; replaces the placeholder lose rule), then step 4 Daily Reef.
 **Version control moved to GitHub 2026-07-14:** everything through step 5 committed &
 pushed to https://github.com/jhong03/CoralCascade.git (main, root commit 4ea08a0; Unity
 .gitignore excludes Library/Temp/.plastic/csproj; commit from THIS git repo going forward —
