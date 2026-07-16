@@ -283,6 +283,12 @@ Arial, so fixed-width text buttons MUST size via `GameFlow.ButtonW(text, style, 
 sizes to the longer of both labels; shop Buy/Sell columns take the catalog-wide max so
 rows align; Back/Debug/Pause sized the same way. Tab-style font stepped down to
 16·scale (secondary actions, incl. the daily banner's long label).
+TEXT-HEIGHT LESSON (user-reported: target-splash lines clipped at the panel bottom):
+same disease vertically — any panel holding wrapping text must size from
+`style.CalcHeight(content, width)`, never a hardcoded height. Fixed in DrawTargetSplash
+(fully measured layout; `_subtitleStyle.wordWrap = true` explicitly so CalcHeight and
+rendering agree) and pre-emptively in the mechanic-tutorial card (`SectionHeight` +
+`TutorialCopy` single-source copy helper).
 SHOP-ROW LESSON (user-reported: names crushed illegible): an over-constrained IMGUI
 horizontal row shrinks the UNSIZED children (the name labels) to slivers — every column
 in a fixed-width row must have an explicit width budget. DrawShopPanel now computes

@@ -477,7 +477,8 @@ namespace CoralCascade
             _subtitleStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = (int)(15 * _scale),
-                alignment = TextAnchor.MiddleCenter
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = true // long lines wrap; panels must CalcHeight, never hardcode
             };
             _subtitleStyle.normal.textColor = SoftTeal;
             if (_fontBody != null) _subtitleStyle.font = _fontBody;
@@ -1717,21 +1718,34 @@ namespace CoralCascade
             // from _splashUntil, which is always set to now + SplashSeconds).
             float appear = Mathf.Clamp01(
                 (Time.unscaledTime - (_splashUntil - SplashSeconds)) / PanelPopSeconds);
+
+            // The panel is sized from MEASURED text heights — hardcoded heights clip the
+            // moment a font change makes a line wrap (user-reported).
+            string title = layout != null ? layout.Name : "";
+            string targets = $"2-star {t2}   ·   3-star {t3}";
+            string hint = "Clear the reef to earn your first star!";
+            float w = Mathf.Min(380f * _scale, Screen.width - 80f);
+            float innerW = w - 32f * _scale;
+            float hTitle = _overlayTitleStyle.CalcHeight(new GUIContent(title), innerW);
+            float hTargets = _subtitleStyle.CalcHeight(new GUIContent(targets), innerW);
+            float hHint = _subtitleStyle.CalcHeight(new GUIContent(hint), innerW);
+            float pad = 14f * _scale, gap = 5f * _scale;
+            float h = pad * 2f + hTitle + gap + hTargets + gap + hHint;
+
             var old = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, fade);
-            float w = Mathf.Min(360f * _scale, Screen.width - 80f);
-            float h = 108f * _scale;
             var rect = new Rect((Screen.width - w) * 0.5f, Screen.height * 0.26f, w, h);
             var oldMatrix = GUI.matrix;
             GUIUtility.ScaleAroundPivot(
                 Vector2.one * Mathf.Max(0.01f, EaseOutBack(appear)), rect.center);
             GUI.Box(rect, GUIContent.none, _panelStyle);
-            GUI.Label(new Rect(rect.x, rect.y + 10f * _scale, rect.width, 34f * _scale),
-                      layout != null ? layout.Name : "", _overlayTitleStyle);
-            GUI.Label(new Rect(rect.x, rect.y + 50f * _scale, rect.width, 24f * _scale),
-                      $"2-star {t2}   ·   3-star {t3}", _subtitleStyle);
-            GUI.Label(new Rect(rect.x, rect.y + 74f * _scale, rect.width, 22f * _scale),
-                      "Clear the reef to earn your first star!", _subtitleStyle);
+            float x = rect.x + 16f * _scale;
+            float y = rect.y + pad;
+            GUI.Label(new Rect(x, y, innerW, hTitle), title, _overlayTitleStyle);
+            y += hTitle + gap;
+            GUI.Label(new Rect(x, y, innerW, hTargets), targets, _subtitleStyle);
+            y += hTargets + gap;
+            GUI.Label(new Rect(x, y, innerW, hHint), hint, _subtitleStyle);
             GUI.matrix = oldMatrix;
             GUI.color = old;
         }
@@ -1752,15 +1766,19 @@ namespace CoralCascade
 
             float w = Mathf.Min(410f * _scale, Screen.width - 50f);
             float btnH = 50f * _scale;
-            float sectionH = 118f * _scale;
-            BeginPanel(w, 52f * _scale + _pendingTutorials.Count * (sectionH + 8f * _scale)
-                          + btnH + 20f * _scale, openT);
+            // Section heights are MEASURED per mechanic (body copy wraps differently per
+            // font/width — hardcoded heights clip, same lesson as the target splash).
+            float textW = w - _panelStyle.padding.horizontal - 148f * _scale - 24f;
+            float total = 0f;
+            foreach (var key in _pendingTutorials)
+                total += SectionHeight(key, textW) + 8f * _scale;
+            BeginPanel(w, 52f * _scale + total + btnH + 20f * _scale, openT);
             GUILayout.Label(_pendingTutorials.Count > 1 ? "NEW DISCOVERIES!" : "NEW DISCOVERY!",
                             _overlayTitleStyle);
             GUILayout.Space(8f * _scale);
             foreach (var key in _pendingTutorials)
             {
-                DrawTutorialSection(key, sectionH);
+                DrawTutorialSection(key, SectionHeight(key, textW));
                 GUILayout.Space(8f * _scale);
             }
             GUILayout.Space(6f * _scale);
@@ -1771,6 +1789,37 @@ namespace CoralCascade
                 _splashUntil = Time.unscaledTime + SplashSeconds; // star targets take the stage next
             }
             EndPanel();
+        }
+
+        /// <summary>The card copy for one mechanic — single source for drawing AND measuring.</summary>
+        private static void TutorialCopy(string key, out string title, out string body)
+        {
+            switch (key)
+            {
+                case "Stone":
+                    title = "Stone bubbles";
+                    body = "Stones are too heavy to match — shots never pop them.\n" +
+                           "Pop the bubbles HOLDING a stone and it sinks away!";
+                    break;
+                case "Ice":
+                    title = "Frozen bubbles";
+                    body = "Iced-over bubbles can't join a match.\n" +
+                           "Pop a match right beside the ice to thaw it free.";
+                    break;
+                default:
+                    title = "The rising tide";
+                    body = "Every few shots the tide pushes the reef DOWN.\n" +
+                           "Bubbles crossing the red line flood the reef — watch the Tide chip!";
+                    break;
+            }
+        }
+
+        /// <summary>Measured section height: title row + wrapped body, floor of the diagram stage.</summary>
+        private float SectionHeight(string key, float textW)
+        {
+            TutorialCopy(key, out _, out string body);
+            float bodyH = _tutBodyStyle.CalcHeight(new GUIContent(body), textW);
+            return Mathf.Max(112f * _scale, 30f * _scale + bodyH + 12f * _scale);
         }
 
         /// <summary>One tutorial row: animated diagram on a light stage, title + copy right.</summary>
@@ -1787,27 +1836,12 @@ namespace CoralCascade
             GUI.DrawTexture(stage, PrimitiveSprites.RoundedRect(new Color(0.72f, 0.92f, 0.98f)));
             GUI.color = old;
 
-            string title, body;
+            TutorialCopy(key, out string title, out string body);
             switch (key)
             {
-                case "Stone":
-                    title = "Stone bubbles";
-                    body = "Stones are too heavy to match — shots never pop them.\n" +
-                           "Pop the bubbles HOLDING a stone and it sinks away!";
-                    DrawStoneDiagram(stage);
-                    break;
-                case "Ice":
-                    title = "Frozen bubbles";
-                    body = "Iced-over bubbles can't join a match.\n" +
-                           "Pop a match right beside the ice to thaw it free.";
-                    DrawIceDiagram(stage);
-                    break;
-                default:
-                    title = "The rising tide";
-                    body = "Every few shots the tide pushes the reef DOWN.\n" +
-                           "Bubbles crossing the red line flood the reef — watch the Tide chip!";
-                    DrawTideDiagram(stage);
-                    break;
+                case "Stone": DrawStoneDiagram(stage); break;
+                case "Ice": DrawIceDiagram(stage); break;
+                default: DrawTideDiagram(stage); break;
             }
             GUI.Label(new Rect(text.x, text.y, text.width, 26f * _scale), title, _tutTitleStyle);
             GUI.Label(new Rect(text.x, text.y + 28f * _scale, text.width, text.height - 28f * _scale),
