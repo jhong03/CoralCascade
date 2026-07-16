@@ -380,6 +380,15 @@ timers, NO fish death/decay, NO social/gifting. **Purely cosmetic forever** (use
   price back, removes the LAST instance + trims its timestamp/position CSVs; Sell
   button in every shop row.
 
+**Portrait-only (2026-07-16, user decision — "never intended for landscape"):**
+ProjectSettings = AutoRotation with ONLY Portrait + PortraitUpsideDown allowed (landscape
+flags 0; upside-down kept for tablets). NOTE: this locks DEVICES only — the editor Game
+view needs a portrait preset (e.g. 1080x2340) to test the intended framing; the
+landscape-window screenshots that looked "board lost in water" were exactly this.
+Still OPEN mobile gaps (assessed 2026-07-16, user deferred): camera frames from the
+HARDCODED 9:19.5 TargetAspect not Camera.aspect (outer columns clip on 21:9 phones;
+board floats small on 4:3 tablets) + no Screen.safeArea insets (top bar under notches).
+
 ## Architecture invariants (do not break)
 
 - **Fairness boundary (non-negotiable, game plan §10):** aim/attach/match are fully deterministic —
