@@ -463,9 +463,17 @@ namespace CoralCascade
             _buttonStyle.active.textColor = Color.white;
             _buttonStyle.focused.textColor = Color.white;
             if (_fontDisplay != null) { _buttonStyle.font = _fontDisplay; _buttonStyle.fontStyle = FontStyle.Normal; }
+            // Real padding keeps text off the rounded corners AND makes CalcSize honest —
+            // fixed-width buttons are sized via ButtonW, never by eyeballed constants
+            // (Kenney Future runs wider than the default font; "Close Shop" clipped).
+            // The bottom pad lifts text onto the depth plate's face, above its lip.
+            _buttonStyle.padding = new RectOffset((int)(16 * _scale), (int)(16 * _scale), 0,
+                _btnRedUp != null ? (int)(5 * _scale) : 0);
 
             _tabStyle = new GUIStyle(_buttonStyle);
             _tabStyle.border = border;
+            _tabStyle.fontSize = (int)(16 * _scale); // secondary actions sit a step down
+            _tabStyle.padding = new RectOffset((int)(16 * _scale), (int)(16 * _scale), 0, 0);
             _tabStyle.normal.background = _btnGreyFlat != null
                 ? _btnGreyFlat
                 : PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.38f));
@@ -482,6 +490,8 @@ namespace CoralCascade
             if (_btnYellowUp != null && _btnYellowDown != null)
             {
                 _tabActiveStyle.border = plateBorder;
+                _tabActiveStyle.padding = new RectOffset((int)(16 * _scale), (int)(16 * _scale),
+                                                         0, (int)(5 * _scale)); // depth plate lip
                 _tabActiveStyle.normal.background = _btnYellowUp;
                 _tabActiveStyle.active.background = _btnYellowDown;
                 _tabActiveStyle.hover.background = _btnYellowUp;
@@ -691,6 +701,16 @@ namespace CoralCascade
         private Rect CenteredColumn(float width, float height)
         {
             return new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+        }
+
+        /// <summary>
+        /// Width that fits <paramref name="text"/> in a button style, never below
+        /// <paramref name="minW"/>. Fixed-width buttons MUST size through this — hardcoded
+        /// widths clip when the font changes (the "Close Shop" lesson).
+        /// </summary>
+        private float ButtonW(string text, GUIStyle style, float minW = 0f)
+        {
+            return Mathf.Max(minW, style.CalcSize(new GUIContent(text)).x + 12f * _scale);
         }
 
         /// <summary>Ease-out with a soft overshoot — the standard bubbly pop-in curve.</summary>
@@ -970,7 +990,8 @@ namespace CoralCascade
         /// <summary>Top-left Back button shared by the sub-pages. True if it navigated.</summary>
         private bool DrawBackButton()
         {
-            if (GUI.Button(new Rect(10f * _scale, 12f * _scale, 92f * _scale, 40f * _scale),
+            if (GUI.Button(new Rect(10f * _scale, 12f * _scale,
+                                    ButtonW("< Back", _tabStyle, 92f * _scale), 40f * _scale),
                            "< Back", _tabStyle))
             {
                 _menuPage = MenuPage.Home;
@@ -1155,9 +1176,12 @@ namespace CoralCascade
                           "Your reef is waiting.\nWin levels, earn pearls, fill it with life!",
                           _subtitleStyle);
 
-            // Header row: shop toggle + rare progress.
+            // Header row: shop toggle + rare progress. Width fits the LONGER of the two
+            // labels so the button doesn't resize (or clip) when toggled.
+            float shopW = Mathf.Max(ButtonW("Reef Shop", _buttonStyle),
+                                    ButtonW("Close Shop", _buttonStyle));
             var shopBtn = new Rect(area.x + 12f * _scale, area.y + 8f * _scale,
-                                   132f * _scale, 40f * _scale);
+                                   shopW, 40f * _scale);
             if (GUI.Button(shopBtn, _shopOpen ? "Close Shop" : "Reef Shop", _buttonStyle))
                 _shopOpen = !_shopOpen;
             GUI.Label(new Rect(shopBtn.xMax + 14f * _scale, area.y + 4f * _scale,
@@ -1282,6 +1306,13 @@ namespace CoralCascade
             GUILayout.BeginArea(rect, _panelStyle);
             GUILayout.Label($"Reef Shop   —   {Pearls.Balance} pearls", _overlayTitleStyle);
             _shopScroll = GUILayout.BeginScrollView(_shopScroll);
+            // Shared column widths: the widest label wins so rows stay aligned.
+            float sellW = 86f * _scale, buyW = 92f * _scale;
+            foreach (var item in ReefStore.Catalog)
+            {
+                sellW = Mathf.Max(sellW, ButtonW($"Sell {ReefStore.SellValue(item)}", _tabStyle));
+                buyW = Mathf.Max(buyW, ButtonW($"Buy {item.Price}", _buttonStyle));
+            }
             foreach (var item in ReefStore.Catalog)
             {
                 // Each item on its own translucent card — the list reads as rows, not text.
@@ -1297,12 +1328,12 @@ namespace CoralCascade
                 GUILayout.FlexibleSpace();
                 GUI.enabled = ReefStore.Count(item.Id) > 0;
                 if (GUILayout.Button($"Sell {ReefStore.SellValue(item)}", _tabStyle,
-                                     GUILayout.Width(86f * _scale), GUILayout.Height(38f * _scale)))
+                                     GUILayout.Width(sellW), GUILayout.Height(38f * _scale)))
                     ReefStore.Sell(item);
                 GUILayout.Space(6f * _scale);
                 GUI.enabled = Pearls.Balance >= item.Price;
                 if (GUILayout.Button($"Buy {item.Price}", _buttonStyle,
-                                     GUILayout.Width(92f * _scale), GUILayout.Height(38f * _scale)))
+                                     GUILayout.Width(buyW), GUILayout.Height(38f * _scale)))
                     ReefStore.Buy(item);
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
@@ -1401,10 +1432,12 @@ namespace CoralCascade
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();
             if (_debugHud != null &&
-                GUILayout.Button("Debug", _buttonStyle, GUILayout.Height(btnH), GUILayout.Width(btnH * 1.9f)))
+                GUILayout.Button("Debug", _buttonStyle, GUILayout.Height(btnH),
+                                 GUILayout.Width(ButtonW("Debug", _buttonStyle, btnH * 1.9f))))
                 _debugHud.Visible = !_debugHud.Visible;
             GUILayout.Space(6f * _scale);
-            if (GUILayout.Button("Pause", _buttonStyle, GUILayout.Height(btnH), GUILayout.Width(btnH * 1.9f)))
+            if (GUILayout.Button("Pause", _buttonStyle, GUILayout.Height(btnH),
+                                 GUILayout.Width(ButtonW("Pause", _buttonStyle, btnH * 1.9f))))
                 Pause();
             GUILayout.EndHorizontal();
             GUILayout.FlexibleSpace();
