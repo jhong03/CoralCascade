@@ -559,7 +559,8 @@ namespace CoralCascade
             {
                 fontSize = (int)(16 * _scale),
                 alignment = TextAnchor.MiddleLeft,
-                richText = true
+                richText = true,
+                wordWrap = false // width-budgeted labels CLIP, never wrap char-by-char
             };
             _barLabelStyle.normal.textColor = DeepTeal;
             if (_fontBody != null) _barLabelStyle.font = _fontBody;
@@ -605,15 +606,17 @@ namespace CoralCascade
 
             // Top-bar stat chips: translucent white pills, deep-teal text; the urgent
             // variant (tide about to drop) flips to solid coral with white text.
-            float chipH = 30f * _scale;
+            // Sized TIGHT: a 1080-wide portrait phone is only ~370 logical points across,
+            // and the whole HUD row must fit inside that.
+            float chipH = 28f * _scale;
             _chipStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize = (int)(15 * _scale),
+                fontSize = (int)(13 * _scale),
                 alignment = TextAnchor.MiddleCenter,
                 richText = true,
                 border = border,
-                padding = new RectOffset((int)(14 * _scale), (int)(14 * _scale), 0, 0),
-                margin = new RectOffset(0, 0, (int)(11 * _scale), 0), // centers in the 52px row
+                padding = new RectOffset((int)(9 * _scale), (int)(9 * _scale), 0, 0),
+                margin = new RectOffset(0, 0, (int)(12 * _scale), 0), // centers in the 52px row
                 fixedHeight = chipH
             };
             _chipStyle.normal.background = PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.55f));
@@ -1599,45 +1602,61 @@ namespace CoralCascade
             GUI.color = oldBarColor;
 
             float pad = 10f * _scale;
-            GUILayout.BeginArea(new Rect(pad, 0, Screen.width - pad * 2f, row1H));
+            float avail = Screen.width - pad * 2f;
+            GUILayout.BeginArea(new Rect(pad, 0, avail, row1H));
             GUILayout.BeginHorizontal(GUILayout.Height(row1H));
+
+            // Column budget (the shop-row lesson, applied to the HUD): chips and the pause
+            // button are measured first and the level label gets EXACTLY the remainder —
+            // on a narrow portrait screen the unbudgeted row crushed the label into a
+            // vertical sliver and shoved the buttons off the right edge (user-reported).
+            // Debug moved into the pause menu: a phone HUD has no room for a dev button.
+            string scoreText = $"Score  <b>{_manager.Score.Total}</b>";
+            string shotsText = $"Shots  <b>{_manager.State.ShotsRemaining}</b>";
+            string tideText = _manager.PressureActive
+                ? $"Tide  <b>{_manager.ShotsUntilPressure}</b>" : null;
+            float ChipW(string s) => _chipStyle.CalcSize(new GUIContent(s)).x + 2f;
+            float btnH = row1H - 12f * _scale;
+            float pauseW = btnH; // icon-sized square: "II"
+            float fixedW = ChipW(scoreText) + 6f * _scale + ChipW(shotsText)
+                         + (tideText != null ? ChipW(tideText) + 6f * _scale : 0f)
+                         + pauseW + 20f * _scale;
+            float labelW = avail - fixedW;
 
             int idx = CurrentLevelIndex();
             string name = _manager.CurrentLayout != null ? _manager.CurrentLayout.Name : "?";
-            GUILayout.Label(idx >= 0 ? $"<b>{_playingSection.NodePrefix} {idx + 1}</b>  {name}" : $"<b>{name}</b>",
-                            _barLabelStyle, GUILayout.ExpandHeight(true));
+            string levelText = idx >= 0
+                ? $"<b>{_playingSection.NodePrefix} {idx + 1}</b>  {name}" : $"<b>{name}</b>";
+            // Too tight for the full title? Drop to the short form, then to nothing.
+            if (idx >= 0 && _barLabelStyle.CalcSize(new GUIContent(levelText)).x > labelW)
+                levelText = $"<b>{_playingSection.NodePrefix} {idx + 1}</b>";
+            if (labelW > 34f * _scale)
+                GUILayout.Label(levelText, _barLabelStyle,
+                                GUILayout.Width(labelW), GUILayout.ExpandHeight(true));
             GUILayout.FlexibleSpace();
+
             // Stats live in pill chips so the HUD reads as designed UI, not floating text.
-            GUILayout.Label($"Score  <b>{_manager.Score.Total}</b>", _chipStyle);
-            GUILayout.Space(8f * _scale);
-            GUILayout.Label($"Shots  <b>{_manager.State.ShotsRemaining}</b>", _chipStyle);
-            if (_manager.PressureActive)
+            GUILayout.Label(scoreText, _chipStyle);
+            GUILayout.Space(6f * _scale);
+            GUILayout.Label(shotsText, _chipStyle);
+            if (tideText != null)
             {
-                GUILayout.Space(8f * _scale);
+                GUILayout.Space(6f * _scale);
                 // The tide chip goes coral and pulses when the NEXT shot drops the board.
                 bool urgent = _manager.ShotsUntilPressure <= 1;
                 var oldChipColor = GUI.color;
                 if (urgent)
                     GUI.color = new Color(1f, 1f, 1f, 0.75f + 0.25f * Mathf.Sin(Time.unscaledTime * 7f));
-                GUILayout.Label($"Tide in  <b>{_manager.ShotsUntilPressure}</b>",
-                                urgent ? _chipUrgentStyle : _chipStyle);
+                GUILayout.Label(tideText, urgent ? _chipUrgentStyle : _chipStyle);
                 GUI.color = oldChipColor;
             }
-            GUILayout.Space(12f * _scale);
+            GUILayout.Space(10f * _scale);
 
-            float btnH = row1H - 12f * _scale;
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             GUILayout.FlexibleSpace();
-            GUILayout.BeginHorizontal();
-            if (_debugHud != null &&
-                GUILayout.Button("Debug", _buttonStyle, GUILayout.Height(btnH),
-                                 GUILayout.Width(ButtonW("Debug", _buttonStyle, btnH * 1.9f))))
-                _debugHud.Visible = !_debugHud.Visible;
-            GUILayout.Space(6f * _scale);
-            if (GUILayout.Button("Pause", _buttonStyle, GUILayout.Height(btnH),
-                                 GUILayout.Width(ButtonW("Pause", _buttonStyle, btnH * 1.9f))))
+            // Icon-sized pause square ("II" — plain ASCII, no glyph risk).
+            if (GUILayout.Button("II", _buyStyle, GUILayout.Height(btnH), GUILayout.Width(pauseW)))
                 Pause();
-            GUILayout.EndHorizontal();
             GUILayout.FlexibleSpace();
             GUILayout.EndVertical();
 
@@ -1968,7 +1987,8 @@ namespace CoralCascade
 
             float w = Mathf.Min(340f * _scale, Screen.width - 60f);
             float btnH = 50f * _scale;
-            BeginPanel(w, 58f * _scale + 3f * (btnH + 10f * _scale), openT);
+            int buttons = _debugHud != null ? 4 : 3;
+            BeginPanel(w, 58f * _scale + buttons * (btnH + 10f * _scale), openT);
             GUILayout.Label("PAUSED", _overlayTitleStyle);
             GUILayout.Space(12f * _scale);
             if (GUILayout.Button("Resume", _buttonStyle, GUILayout.Height(btnH)))
@@ -1979,6 +1999,16 @@ namespace CoralCascade
             GUILayout.Space(10f * _scale);
             if (GUILayout.Button("Level Select", _buttonStyle, GUILayout.Height(btnH)))
                 QuitToLevelSelect();
+            // Dev tools live here now — the in-level HUD has no room on phone widths.
+            if (_debugHud != null)
+            {
+                GUILayout.Space(10f * _scale);
+                if (GUILayout.Button("Debug Tools", _tabStyle, GUILayout.Height(btnH)))
+                {
+                    _debugHud.Visible = !_debugHud.Visible;
+                    Resume(); // the harness is unusable behind a frozen pause scrim
+                }
+            }
             EndPanel();
         }
 

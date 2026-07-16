@@ -283,6 +283,14 @@ Arial, so fixed-width text buttons MUST size via `GameFlow.ButtonW(text, style, 
 sizes to the longer of both labels; shop Buy/Sell columns take the catalog-wide max so
 rows align; Back/Debug/Pause sized the same way. Tab-style font stepped down to
 16·scale (secondary actions, incl. the daily banner's long label).
+HUD-WIDTH LESSON (user-reported on the first true-portrait test: level label crushed to
+a vertical sliver, Debug/Pause pushed off-screen): a 1080-wide portrait phone is only
+~370 LOGICAL points across (scale ≈ 2.9) — budget the whole row in logical points before
+designing it. DrawTopBar now: chips shrunk (13·scale font, 9·scale pads, "Tide N"),
+Pause is an icon-square ("II", plain ASCII), Debug button MOVED to the pause menu
+("Debug Tools", toggles the HUD + resumes), and the level label gets the measured
+remainder (full title → short "Level N" → hidden). `_barLabelStyle.wordWrap = false`
+(width-constrained labels must clip, never wrap char-by-char).
 TEXT-HEIGHT LESSON (user-reported: target-splash lines clipped at the panel bottom):
 same disease vertically — any panel holding wrapping text must size from
 `style.CalcHeight(content, width)`, never a hardcoded height. Fixed in DrawTargetSplash
