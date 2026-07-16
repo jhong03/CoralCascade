@@ -19,10 +19,11 @@ namespace CoralCascade
 
         /// <summary>
         /// Pages within the LevelSelect screen (user request 2026-07-14: menu and level
-        /// routes must be SEPARATE pages): Home = big section cards + daily banner;
+        /// routes must be SEPARATE pages): Intro = the launch splash (shown ONCE at boot —
+        /// nothing ever navigates back to it); Home = big section cards + daily banner;
         /// SectionMap = one section's winding route with a Back button; Reef = aquarium.
         /// </summary>
-        private enum MenuPage { Home, SectionMap, Reef }
+        private enum MenuPage { Intro, Home, SectionMap, Reef }
 
         /// <summary>
         /// One tab of the level map with its own level list and its own progression chain.
@@ -66,7 +67,8 @@ namespace CoralCascade
         private float _splashUntil;  // start-of-level target splash (tap or first shot skips)
         private int _pearlsEarned;   // aquarium currency granted by this win
 
-        private MenuPage _menuPage = MenuPage.Home;
+        private MenuPage _menuPage = MenuPage.Intro; // boot lands on the launch splash
+        private float _introShownAt; // staggers the splash animation + guards instant skips
 
         // My Reef aquarium page (roadmap step 5) — purely cosmetic, see ReefStore.
         private bool _shopOpen;
@@ -114,6 +116,7 @@ namespace CoralCascade
         private GUIStyle _meterLabelStyle, _shopSmallStyle, _cardStyle, _cardActiveStyle;
         private GUIStyle _chipStyle, _chipUrgentStyle, _nodeTextStyle, _chevronStyle, _rowStyle;
         private GUIStyle _buyStyle, _sellStyle, _shopNameStyle;
+        private GUIStyle _introTitleStyle, _introPromptStyle;
         private float _scale;
         private bool _stylesReady;
         private Matrix4x4 _panelMatrix; // saved by BeginPanel (pop-in scale), restored by EndPanel
@@ -172,6 +175,7 @@ namespace CoralCascade
             bool introDone = Progress.HighestUnlocked("Intro") > _sections[0].Levels.Count;
             _sectionIndex = introDone ? 1 : 0;
             _playingSection = _sections[_sectionIndex];
+            _introShownAt = Time.unscaledTime;
         }
 
         private void OnDestroy()
@@ -185,6 +189,11 @@ namespace CoralCascade
             if (_screen != FlowScreen.Playing)
             {
                 _endSeen = false;
+                // Any tap leaves the launch splash (after a short guard so the tap that
+                // launched the app can't skip it before it's even been seen).
+                if (_menuPage == MenuPage.Intro && PointerInput.PressedThisFrame &&
+                    Time.unscaledTime - _introShownAt > 0.4f)
+                    _menuPage = MenuPage.Home;
                 HandleMapDrag();
                 HandleDecorPlacement();
                 return;
@@ -611,6 +620,17 @@ namespace CoralCascade
             // A step under _barLabelStyle so the longest names fit the tightest column.
             _shopNameStyle = new GUIStyle(_barLabelStyle) { fontSize = (int)(14 * _scale) };
 
+            // Launch splash: an oversized title and a white tap prompt (the prompt sits on
+            // the DEEP end of the gradient, where deep-teal text would drown).
+            _introTitleStyle = new GUIStyle(_titleStyle) { fontSize = (int)(46 * _scale) };
+            _introPromptStyle = new GUIStyle(_subtitleStyle)
+            {
+                fontSize = (int)(20 * _scale),
+                fontStyle = FontStyle.Bold
+            };
+            _introPromptStyle.normal.textColor = Color.white;
+            if (_fontDisplay != null) { _introPromptStyle.font = _fontDisplay; _introPromptStyle.fontStyle = FontStyle.Normal; }
+
             _meterLabelStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = (int)(13 * _scale),
@@ -830,7 +850,8 @@ namespace CoralCascade
                     new Vector3(0f, (1f - EaseOutBack(pageT)) * 30f * _scale, 0f)) * GUI.matrix;
                 GUI.color = new Color(1f, 1f, 1f, 0.25f + 0.75f * pageT);
             }
-            if (_menuPage == MenuPage.Home) DrawHomePage();
+            if (_menuPage == MenuPage.Intro) DrawIntroPage();
+            else if (_menuPage == MenuPage.Home) DrawHomePage();
             else if (_menuPage == MenuPage.Reef) DrawReefPage();
             else DrawSectionMapPage();
             GUI.matrix = pageMatrix;
@@ -955,7 +976,91 @@ namespace CoralCascade
             GUI.EndGroup();
         }
 
-        // ---- Menu pages (home / section route / reef) ----------------------------------------
+        // ---- Menu pages (intro / home / section route / reef) --------------------------------
+
+        /// <summary>
+        /// The launch splash: the lagoon breathes (rising bubbles, cruising fish), the
+        /// title pops in with a trio of game orbs above it, then a pulsing "tap to dive"
+        /// prompt. Tap-anywhere to continue is handled in Update; everything here is
+        /// unscaled-time animation and null-safe sprite loads.
+        /// </summary>
+        private void DrawIntroPage()
+        {
+            float t = Time.unscaledTime - _introShownAt;
+            var oldColor = GUI.color;
+
+            // Rising ambient bubbles, looping and deterministic per index.
+            var circle = PrimitiveSprites.Circle().texture;
+            for (int i = 0; i < 14; i++)
+            {
+                float ph = Frac(t * (0.05f + 0.012f * ((i * 7) % 5)) + i * 0.137f);
+                float x = Screen.width * Frac(i * 0.618f) + Mathf.Sin(t * 0.8f + i) * 12f * _scale;
+                float y = Mathf.Lerp(Screen.height + 30f, -30f, ph);
+                float s = (6f + (i * 13) % 18) * _scale;
+                GUI.color = new Color(1f, 1f, 1f, 0.10f + 0.25f * (1f - ph));
+                GUI.DrawTexture(new Rect(x, y, s, s), circle);
+            }
+            GUI.color = oldColor;
+
+            // Fish cruising by at depths that keep the title band (~0.32-0.44) clear.
+            DrawIntroFish("fish_blue", 0.14f, 44f, 130, t);
+            DrawIntroFish("fish_orange", 0.58f, 36f, 470, t);
+            DrawIntroFish("fish_green", 0.72f, 40f, 910, t);
+
+            // A trio of game orbs bobbing above the title — "this is a bubble game".
+            var orbTex = PrimitiveSprites.GlossyOrb().texture;
+            Color[] orbTints = { new Color(0.35f, 0.78f, 1f), Coral, Sunshine };
+            float orbAppear = Mathf.Clamp01((t - 0.25f) / 0.5f);
+            for (int i = 0; i < 3; i++)
+            {
+                float size = (30f + 6f * (i == 1 ? 1f : 0f)) * _scale * Mathf.Max(0.01f, EaseOutBack(orbAppear));
+                float ox = Screen.width * 0.5f + (i - 1) * 64f * _scale;
+                float oy = Screen.height * 0.24f + Mathf.Sin(t * 2.2f + i * 1.9f) * 7f * _scale;
+                GUI.color = orbTints[i];
+                GUI.DrawTexture(new Rect(ox - size * 0.5f, oy - size * 0.5f, size, size), orbTex);
+            }
+            GUI.color = oldColor;
+
+            // Title pops in with the bubble curve, then floats.
+            float appear = Mathf.Clamp01(t / 0.7f);
+            float bob = Mathf.Sin(t * 1.3f) * 4f * _scale;
+            var titleRect = new Rect(0, Screen.height * 0.32f + bob, Screen.width, 64f * _scale);
+            var m = GUI.matrix;
+            GUIUtility.ScaleAroundPivot(Vector2.one * Mathf.Max(0.01f, EaseOutBack(appear)),
+                                        titleRect.center);
+            DrawLabelShadowed(titleRect, "CORAL CASCADE", _introTitleStyle);
+            GUI.matrix = m;
+
+            float subA = Mathf.Clamp01((t - 0.55f) / 0.5f);
+            GUI.color = new Color(1f, 1f, 1f, subA);
+            GUI.Label(new Rect(0, titleRect.yMax + 4f * _scale, Screen.width, 26f * _scale),
+                      "pop bubbles · ride the cascade · grow your reef", _subtitleStyle);
+            GUI.color = oldColor;
+
+            // The tap prompt breathes once the title has settled.
+            if (t > 1.1f)
+            {
+                GUI.color = new Color(1f, 1f, 1f, 0.55f + 0.45f * Mathf.Sin(t * 3.2f));
+                DrawLabelShadowed(new Rect(0, Screen.height * 0.66f, Screen.width, 30f * _scale),
+                                  "Tap to dive in!", _introPromptStyle);
+                GUI.color = oldColor;
+            }
+        }
+
+        /// <summary>A splash fish swimming laps across the whole screen. Null-safe.</summary>
+        private void DrawIntroFish(string sprite, float y01, float sizePx, int phase, float t)
+        {
+            var s = BubbleArt.Get(sprite);
+            if (s == null) return;
+            float w = sizePx * _scale;
+            float h = w * (s.rect.height / s.rect.width);
+            float span = Screen.width + w * 2f;
+            float k = t * (34f + (phase % 7) * 5f) * _scale + phase;
+            float px = Mathf.PingPong(k, span);
+            bool movingRight = ((int)(k / span) & 1) == 0;
+            float y = Screen.height * y01 + Mathf.Sin(t * 1.7f + phase) * 8f * _scale;
+            DrawSpriteGUI(new Rect(px - w, y, w, h), s, !movingRight, new Color(1f, 1f, 1f, 0.95f));
+        }
 
         /// <summary>The main menu: title, daily banner, then one big card per destination.</summary>
         private void DrawHomePage()

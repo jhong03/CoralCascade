@@ -291,6 +291,17 @@ and gives the name column the explicit remainder (min 96·scale, `_shopNameStyle
 14·scale); panel cap widened 430→520·scale; title row = "Reef Shop" + right-aligned
 balance (the old single title line could clip too).
 
+**Launch splash (2026-07-16, user: "game shouldn't just show the main menu straight
+away"):** `MenuPage.Intro` is the boot page (`_menuPage` initializer; NOTHING navigates
+back to it — QuitToLevelSelect lands on SectionMap, Back lands on Home, so it's
+once-per-session by construction). `GameFlow.DrawIntroPage`: rising bubbles + 3 cruising
+pack fish (`DrawIntroFish`, null-safe, depths avoid the title band) + orb trio in game
+colors (aqua/coral/sunshine) + EaseOutBack title pop + tagline fade + pulsing white
+"Tap to dive in!" (white `_introPromptStyle` — the prompt sits on the gradient's deep
+end where teal drowns; title is `_introTitleStyle` 46·scale). Tap-anywhere advance
+lives in Update (PressedThisFrame, 0.4s guard so the app-launch tap can't skip it);
+leaving Intro rides the existing page slide-in transition. All unscaled time.
+
 Pack shortlist (researched 2026-07-14):
 - **Kenney Fish Pack** (kenney.nl/assets/fish-pack, CC0, 120 vector sea creatures/tiles) —
   DONE for balls; seaweed/terrain/background_* decor + hud_number_* digits still unused.
