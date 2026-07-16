@@ -113,6 +113,7 @@ namespace CoralCascade
         private GUIStyle _nodeStyle, _nodeBestStyle, _tabStyle, _tabActiveStyle, _panelStyle;
         private GUIStyle _meterLabelStyle, _shopSmallStyle, _cardStyle, _cardActiveStyle;
         private GUIStyle _chipStyle, _chipUrgentStyle, _nodeTextStyle, _chevronStyle, _rowStyle;
+        private GUIStyle _buyStyle, _sellStyle, _shopNameStyle;
         private float _scale;
         private bool _stylesReady;
         private Matrix4x4 _panelMatrix; // saved by BeginPanel (pop-in scale), restored by EndPanel
@@ -593,6 +594,22 @@ namespace CoralCascade
                 margin = new RectOffset(0, (int)(4 * _scale), 0, 0)
             };
             _rowStyle.normal.background = PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.50f));
+
+            // Compact shop-row buttons: smaller type + tighter padding than the main
+            // buttons, so the item-name column keeps real width on narrow screens.
+            _buyStyle = new GUIStyle(_buttonStyle)
+            {
+                fontSize = (int)(15 * _scale),
+                padding = new RectOffset((int)(10 * _scale), (int)(10 * _scale), 0,
+                                         _btnRedUp != null ? (int)(4 * _scale) : 0)
+            };
+            _sellStyle = new GUIStyle(_tabStyle)
+            {
+                fontSize = (int)(15 * _scale),
+                padding = new RectOffset((int)(10 * _scale), (int)(10 * _scale), 0, 0)
+            };
+            // A step under _barLabelStyle so the longest names fit the tightest column.
+            _shopNameStyle = new GUIStyle(_barLabelStyle) { fontSize = (int)(14 * _scale) };
 
             _meterLabelStyle = new GUIStyle(GUI.skin.label)
             {
@@ -1299,40 +1316,54 @@ namespace CoralCascade
 
         private void DrawShopPanel(Rect area)
         {
-            float w = Mathf.Min(430f * _scale, Screen.width - 36f);
+            float w = Mathf.Min(520f * _scale, Screen.width - 36f);
             float h = Mathf.Min(area.height - 16f * _scale, 470f * _scale);
             var rect = new Rect((Screen.width - w) * 0.5f, area.y + 56f * _scale, w,
                                 Mathf.Min(h, area.height - 64f * _scale));
             GUILayout.BeginArea(rect, _panelStyle);
-            GUILayout.Label($"Reef Shop   —   {Pearls.Balance} pearls", _overlayTitleStyle);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Reef Shop", _overlayTitleStyle);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label($"{Pearls.Balance} pearls", _barLabelStyle, GUILayout.ExpandHeight(true));
+            GUILayout.EndHorizontal();
             _shopScroll = GUILayout.BeginScrollView(_shopScroll);
-            // Shared column widths: the widest label wins so rows stay aligned.
-            float sellW = 86f * _scale, buyW = 92f * _scale;
+
+            // Column budget: Sell/Buy take their widest label (rows stay aligned), the
+            // name column gets EVERYTHING left over — an over-constrained row crushes the
+            // flexible name labels into illegible slivers (user-reported), so the name
+            // width is always explicit, never leftovers-after-overflow.
+            float sellW = 0f, buyW = 0f;
             foreach (var item in ReefStore.Catalog)
             {
-                sellW = Mathf.Max(sellW, ButtonW($"Sell {ReefStore.SellValue(item)}", _tabStyle));
-                buyW = Mathf.Max(buyW, ButtonW($"Buy {item.Price}", _buttonStyle));
+                sellW = Mathf.Max(sellW, ButtonW($"Sell {ReefStore.SellValue(item)}", _sellStyle));
+                buyW = Mathf.Max(buyW, ButtonW($"Buy {item.Price}", _buyStyle));
             }
+            float iconW = 42f * _scale;
+            float nameW = rect.width - _panelStyle.padding.horizontal - 24f /*scrollbar*/
+                          - _rowStyle.padding.horizontal - _rowStyle.margin.right
+                          - iconW - sellW - buyW - 24f * _scale /*spacers*/;
+            nameW = Mathf.Max(96f * _scale, nameW);
+
             foreach (var item in ReefStore.Catalog)
             {
                 // Each item on its own translucent card — the list reads as rows, not text.
                 GUILayout.BeginHorizontal(_rowStyle, GUILayout.Height(52f * _scale));
-                var iconRect = GUILayoutUtility.GetRect(42f * _scale, 42f * _scale,
-                                                        GUILayout.Width(42f * _scale));
+                var iconRect = GUILayoutUtility.GetRect(iconW, iconW, GUILayout.Width(iconW));
                 DrawReefItemIcon(iconRect, item);
                 GUILayout.Space(8f * _scale);
-                GUILayout.BeginVertical();
-                GUILayout.Label(item.DisplayName, _barLabelStyle);
-                GUILayout.Label($"owned {ReefStore.Count(item.Id)}", _shopSmallStyle);
+                GUILayout.BeginVertical(GUILayout.Width(nameW));
+                GUILayout.Label(item.DisplayName, _shopNameStyle, GUILayout.Width(nameW));
+                GUILayout.Label($"owned {ReefStore.Count(item.Id)}", _shopSmallStyle,
+                                GUILayout.Width(nameW));
                 GUILayout.EndVertical();
                 GUILayout.FlexibleSpace();
                 GUI.enabled = ReefStore.Count(item.Id) > 0;
-                if (GUILayout.Button($"Sell {ReefStore.SellValue(item)}", _tabStyle,
+                if (GUILayout.Button($"Sell {ReefStore.SellValue(item)}", _sellStyle,
                                      GUILayout.Width(sellW), GUILayout.Height(38f * _scale)))
                     ReefStore.Sell(item);
                 GUILayout.Space(6f * _scale);
                 GUI.enabled = Pearls.Balance >= item.Price;
-                if (GUILayout.Button($"Buy {item.Price}", _buttonStyle,
+                if (GUILayout.Button($"Buy {item.Price}", _buyStyle,
                                      GUILayout.Width(buyW), GUILayout.Height(38f * _scale)))
                     ReefStore.Buy(item);
                 GUI.enabled = true;

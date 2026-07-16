@@ -283,6 +283,13 @@ Arial, so fixed-width text buttons MUST size via `GameFlow.ButtonW(text, style, 
 sizes to the longer of both labels; shop Buy/Sell columns take the catalog-wide max so
 rows align; Back/Debug/Pause sized the same way. Tab-style font stepped down to
 16·scale (secondary actions, incl. the daily banner's long label).
+SHOP-ROW LESSON (user-reported: names crushed illegible): an over-constrained IMGUI
+horizontal row shrinks the UNSIZED children (the name labels) to slivers — every column
+in a fixed-width row must have an explicit width budget. DrawShopPanel now computes
+sellW/buyW (catalog-wide max, compact `_sellStyle`/`_buyStyle` 15·scale + 10·scale pads)
+and gives the name column the explicit remainder (min 96·scale, `_shopNameStyle`
+14·scale); panel cap widened 430→520·scale; title row = "Reef Shop" + right-aligned
+balance (the old single title line could clip too).
 
 Pack shortlist (researched 2026-07-14):
 - **Kenney Fish Pack** (kenney.nl/assets/fish-pack, CC0, 120 vector sea creatures/tiles) —
