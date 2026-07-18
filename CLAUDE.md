@@ -1,7 +1,70 @@
 # Coral Cascade — Project Context
 
-Mobile bubble shooter (Unity 6000.4.1f1, 2D URP, **new Input System only** — legacy `Input` throws).
+Mobile bubble shooter (Unity 6000.5.3f1, 2D URP, **new Input System only** — legacy `Input` throws).
 Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `CoralCascade_game_plan.md`.
+
+## Status (as of 2026-07-18)
+
+**2026-07-18 session — PLAY-TEST FIXES (committed & pushed; compile-verified, generator-
+verified for the reef changes, but NOT deeply play-tested beyond the user's reports).**
+Eight fixes, all user-approved via question dialogs. Verify tooling: Roslyn compile check
+(no editor needed) + a scratchpad PowerShell replication of the deterministic generator
+(bubble counts / shots / star targets / stone audit — matched the game exactly: computed
+Reef 10 2★ = 666, same as the in-game HUD).
+
+- **Pearl economy is now PROGRESS-gated (was an infinite replay faucet).** `WinBase +
+  PerStar×stars` used to pay on EVERY win — replaying any cleared level farmed pearls
+  forever. Now (GameFlow win block): first clear pays `WinBase + PerStar×stars +
+  FirstClearBonus`; a REPLAY pays only for genuine improvement — `PerStar×(stars beyond the
+  old best) + (NewBestBonus if a new best score)`; no improvement = 0. Captures `prevStars`
+  BEFORE `Stars.Submit` overwrites it. Total pearls per level is now bounded.
+- **CRITTERS: rescue-to-aquarium collection REMOVED — they are now a pure in-level
+  difficulty obstacle** (user decision; SUPERSEDES the 2026-07-17 critter-collection notes
+  below). Deleted `ReefStore.RescuedCritter/RescuedCount/AddRescued`,
+  `BoardManager.CrittersRescued/NotifyCritterRescued` + reset, the `CascadeController`
+  notify call, and GameFlow's win-block banking + tank-draw loop + end-overlay "joins your
+  reef" line + `_crittersSaved`. Critters still parse ('C'), render (trapped-fish bubble),
+  teach (tutorial card, reworded to drop the reef promise), and must be DROPPED to clear —
+  that's the difficulty. Present identically on every play/replay (deterministic layout);
+  nothing removes them. Old `CoralCascade.Reef.Rescued` PlayerPref is orphaned (harmless).
+- **Ice now VISIBLE.** The frozen look was a translucent "Frost" CHILD SpriteRenderer that
+  didn't render (same class as the open backdrop world-SpriteRenderer bug). Moved onto the
+  ROOT orb tint: `sr.color = Lerp(color, FrostColor(0.80,0.92,1), FrostWash 0.55)` when
+  frozen (BubbleArt) — guaranteed to render (the orb does), color still hinted, gloss kept.
+  Frost child retired.
+- **Queue weighting — SOFTENED PROPORTIONAL** (rare colors stopped flooding the queue).
+  `Launcher.WeightedPick` weights by remaining count, `P(c) = bias·share + (1−bias)/n`,
+  `ColorWeightBias = 0.65` (1 = strict proportional, 0 = old uniform). New
+  `Board.CollectColors(into, counts)` overload. Replay-safe (fired color still recorded in
+  the Shot struct). Both the visible draw and the auto re-roll use it.
+- **STAR CURVE lowered 18×/28× → 16×/24×** (`Stars.Star2PerBubble`/`Star3PerBubble`). On
+  obstacle-heavy reefs 28× sat at/beyond the practical score ceiling (stones inflate
+  BubbleCount yet can't be matched/chained and fragment cascades), so 3★ was unreachable
+  (user-reported Reefs 8–10). e.g. Reef 10 3★ 1036 → 888.
+- **STONES stay OFF the ceiling rows and outer columns** (the big one — the generator could
+  ship UNWINNABLE boards). A stone sealing a row-0 anchor (removable only by matching, never
+  by dropping) = a dead level; Reef 10 was PROVEN unwinnable (2 yellows walled in a corner,
+  one a ceiling anchor). Fix: guaranteed stones now `minRow: 3, interiorCols: true` via a new
+  `ConvertCells` param; sprinkle stones gated inline to `r>=3 && interior` (rng draw still
+  consumed so the stream stays put). Verified: all 50 reefs place their full stone counts,
+  ZERO stones in rows 0–2 / edge columns, bubble counts (hence star targets) unchanged,
+  anchoring preserved by construction. NOTE: stone positions moved ⇒ old best/star records
+  for stone reefs are orphaned (accepted, same as the restructure). RESIDUAL (not done):
+  critters can still sit at row 2 — far lower seal risk (droppable, single), revisit if it
+  bites. A full winnability/reachability solver in candidate selection was OFFERED and
+  DEFERRED in favor of this cheaper placement rule.
+- **Top-bar LEVEL TITLE moved to its OWN centered row** (user request, after the upper-left
+  label clipped to a misleading "1"/"Level 1" whenever the chip row got crowded — worst with
+  the 3-chip tide layout). The bar is now THREE rows: centered title (`NodePrefix N`, e.g.
+  "Level 18"; Daily shows its name) via new `_barTitleStyle` (display font, centered) + chip
+  row (chips left, pause right — level label removed, so no more width fight) + star meter.
+  Bar height 76→106px·scale; the `GameBootstrap.ConfigureWorld` camera reservation bumped
+  84f→114f (=106 content+8 margin, uiScale == GameFlow `_scale`) so it still can't overlap
+  the anchor rows. `TopBarHeight`/pointer-occlusion track `_topBarRect.height` automatically.
+- **Mechanic-tutorial card TITLE no longer clips.** The wide display font wrapped "Frozen
+  bubbles" to two lines but the layout reserved one line. Now measures title height with
+  `CalcHeight` (same lesson as the body copy / target splash) in both `SectionHeight` and
+  `DrawTutorialSection`.
 
 ## Status (as of 2026-07-17)
 

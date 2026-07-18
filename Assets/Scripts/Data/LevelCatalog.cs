@@ -21,7 +21,7 @@ namespace CoralCascade
     ///    2  Reefs  6–10  Stone Garden      stones introduced (GUARANTEED counts)
     ///    3  Reefs 11–15  Frozen Shallows   ice introduced; 5th color at 14
     ///    4  Reefs 16–20  Rising Tide       tide introduced (every 10 shots)
-    ///    5  Reefs 21–25  Critter Cove      rescue critters introduced (breather wave)
+    ///    5  Reefs 21–25  Critter Cove      critters introduced (obstacle; breather wave)
     ///    6  Reefs 26–30  Deepwater         first stone+ice+tide combinations
     ///    7  Reefs 31–35  Stonefall Trench  stone-heavy under tide; 6th color at 34
     ///    8  Reefs 36–40  Glacier Line      ice-heavy, critters behind the ice
@@ -163,7 +163,7 @@ namespace CoralCascade
             S(11, 8, 5, 0.74, tide: 10, margin: 5, icePct: 0.02, budget: 1.00),
             S(11, 8, 5, 0.76, tide: 9,  margin: 5, stones: 5, budget: 0.95),
 
-            // Wave 5 — Critter Cove (21–25): rescues introduced; a breather wave.
+            // Wave 5 — Critter Cove (21–25): critters introduced (drop-to-clear obstacle); a breather wave.
             S(11, 9, 5, 0.68, critters: 2, budget: 1.20),
             S(11, 9, 5, 0.70, critters: 2, stonePct: 0.02, budget: 1.15),
             S(11, 9, 5, 0.72, critters: 3, icePct: 0.02, budget: 1.10),
@@ -250,9 +250,14 @@ namespace CoralCascade
                         color = NormalizeColor(grid[r][c - 1]);
                     grid[r][c] = color != '.' ? color : palette[rng.Next(spec.Colors)];
 
-                    // Sprinkle texture (r >= 1 only, so stones never touch the anchor row).
+                    // Sprinkle texture. Stones obey the SAME off-ceiling/off-edge rule as the
+                    // guaranteed ones (rows 3+, interior columns) so a sprinkle can't seal a
+                    // top-row anchor either. The rng draw is still consumed when suppressed so
+                    // the stream stays put; the cell just keeps its color instead.
                     if (rng.NextDouble() < spec.StonePct)
-                        grid[r][c] = 'S';
+                    {
+                        if (r >= 3 && c > 0 && c < columns - 1) grid[r][c] = 'S';
+                    }
                     else if (rng.NextDouble() < spec.IcePct)
                         grid[r][c] = char.ToLowerInvariant(grid[r][c]);
                 }
@@ -263,7 +268,10 @@ namespace CoralCascade
             // (rows 2+: buried enough that freeing one is a real act, never hard-locked
             // because only row 0 anchors and critters never sit there).
             ConvertCells(grid, rng, spec.Critters, minRow: 2, ch => 'C');
-            ConvertCells(grid, rng, spec.Stones,   minRow: 1, ch => 'S');
+            // Stones stay OFF the ceiling rows and outer columns: a stone sealing a top-row
+            // anchor (removable only by matching, never by dropping) makes the board
+            // UNWINNABLE — user-reported dead board on Reef 10 (2026-07-18). Rows 3+, interior.
+            ConvertCells(grid, rng, spec.Stones,   minRow: 3, ch => 'S', interiorCols: true);
             ConvertCells(grid, rng, spec.Ice,      minRow: 1, char.ToLowerInvariant);
 
             var cellRows = new string[rows];
@@ -305,14 +313,20 @@ namespace CoralCascade
         /// Places fewer when the board is too small to host them all.
         /// </summary>
         private static void ConvertCells(char[][] grid, Random rng, int count, int minRow,
-                                         Func<char, char> convert)
+                                         Func<char, char> convert, bool interiorCols = false)
         {
             if (count <= 0) return;
             var candidates = new List<(int r, int c)>();
             for (int r = minRow; r < grid.Length; r++)
-                for (int c = 0; c < grid[r].Length; c++)
+            {
+                int cols = grid[r].Length;
+                for (int c = 0; c < cols; c++)
+                {
+                    if (interiorCols && (c == 0 || c == cols - 1)) continue;
                     if (grid[r][c] >= 'A' && grid[r][c] <= 'Z' && grid[r][c] != 'S' && grid[r][c] != 'C')
                         candidates.Add((r, c));
+                }
+            }
 
             // Fisher–Yates on the candidate list, then take the first `count`.
             for (int i = candidates.Count - 1; i > 0; i--)

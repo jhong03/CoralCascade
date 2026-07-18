@@ -95,26 +95,6 @@ namespace CoralCascade
             return false;
         }
 
-        // ---- Rescued critters (waves feature 2026-07-17) --------------------------------------
-        // NOT buyable and never sellable: each one was freed in a level (banked on WIN by
-        // GameFlow). They swim in the tank like any fish; no growth clock — a rescue
-        // arrives fully grown (GrowthScale returns 1 for ids without timestamps).
-
-        public static readonly ReefItem RescuedCritter =
-            new ReefItem("rescued_critter", "Rescued Critter", "fish_pink", 0, ReefItemKind.Fish, 0.9f)
-            { Tint = new Color(1f, 0.88f, 0.94f) }; // the pale-bubble pink they were freed from
-
-        private const string RescuedKey = "CoralCascade.Reef.Rescued";
-
-        public static int RescuedCount => PlayerPrefs.GetInt(RescuedKey, 0);
-
-        public static void AddRescued(int n)
-        {
-            if (n <= 0) return;
-            PlayerPrefs.SetInt(RescuedKey, RescuedCount + n);
-            PlayerPrefs.Save();
-        }
-
         // ---- Ownership -----------------------------------------------------------------------
 
         private static string CountKey(string id) => "CoralCascade.Reef." + id;

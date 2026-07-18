@@ -51,20 +51,6 @@ namespace CoralCascade
         /// <summary>True when the loss was the danger line, not the shot budget (overlay text).</summary>
         public bool PressureLoss { get; private set; }
 
-        /// <summary>
-        /// Critters freed this run (reset on level load). Banked permanently by GameFlow
-        /// on WIN only — a lost attempt leaves them trapped for the next try.
-        /// </summary>
-        public int CrittersRescued { get; private set; }
-
-        /// <summary>Called by CascadeController when a detached cell was a Critter.</summary>
-        public void NotifyCritterRescued(Vector2 pos)
-        {
-            CrittersRescued++;
-            if (PopEffects.Instance != null)
-                PopEffects.Instance.FloatingText(pos + Vector2.up * 0.4f,
-                                                 "RESCUED!", new Color(1f, 0.72f, 0.85f));
-        }
         public bool PressureActive => CurrentLayout != null && CurrentLayout.PressureEveryShots > 0;
         /// <summary>Shots until the next pressure drop, or -1 when pressure is off (HUD).</summary>
         public int ShotsUntilPressure =>
@@ -142,7 +128,6 @@ namespace CoralCascade
             _shotsSincePressure = 0;
             _pressureDropIndex = 0;
             PressureLoss = false;
-            CrittersRescued = 0;
             Board.CollectColors(_pressurePalette);
             if (_pressurePalette.Count == 0)
                 _pressurePalette.AddRange(BubbleColorExtensions.Playable);

@@ -48,6 +48,24 @@ namespace CoralCascade
                     into.Add(cell.Color);
         }
 
+        /// <summary>
+        /// As <see cref="CollectColors(List{BubbleColor})"/>, but also fills a PARALLEL list
+        /// with each color's occupied count (one pass) — the launcher weights the queue draw
+        /// by how many of each color remain, so a nearly-gone color stops flooding the queue.
+        /// </summary>
+        public void CollectColors(List<BubbleColor> into, List<int> counts)
+        {
+            into.Clear();
+            counts.Clear();
+            foreach (var cell in AllCells)
+                if (cell.Occupied && cell.Color.IsPlayable())
+                {
+                    int i = into.IndexOf(cell.Color);
+                    if (i < 0) { into.Add(cell.Color); counts.Add(1); }
+                    else counts[i]++;
+                }
+        }
+
         /// <summary>Clears every cell then fills the top rows from a layout (top row = anchor row).</summary>
         public void LoadData(BoardLayoutData data)
         {

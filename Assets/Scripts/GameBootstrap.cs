@@ -123,10 +123,11 @@ namespace CoralCascade
             // ---- Camera framing (width-fit for the target aspect) ----
             float boardHalfWidth = (rightInner - leftInner) * 0.5f + 0.25f;
             float orthoSize = boardHalfWidth / TargetAspect;
-            // Reserve room for the flow top bar (two rows: labels + star meter — see
-            // GameFlow.DrawTopBar, 76px·scale) so it never overlaps the anchor rows.
+            // Reserve room for the flow top bar (THREE rows now: centered level title +
+            // stat chips + star meter — see GameFlow.DrawTopBar, 106px·scale) so it never
+            // overlaps the anchor rows. 114 = 106 content + 8 margin (was 84 for two rows).
             float uiScale = Mathf.Max(1f, Screen.height / 800f);
-            float topBarWorld = 84f * uiScale * (2f * orthoSize / Screen.height);
+            float topBarWorld = 114f * uiScale * (2f * orthoSize / Screen.height);
             float camY = ceilingSurfaceY + 0.6f + topBarWorld - orthoSize;
             float camBottom = camY - orthoSize;
             _cam.orthographicSize = orthoSize;

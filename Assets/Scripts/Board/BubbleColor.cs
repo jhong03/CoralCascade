@@ -28,8 +28,9 @@ namespace CoralCascade
 
         /// <summary>
         /// A trapped sea creature (waves feature, 2026-07-17): unmatchable and unfireable
-        /// like Stone, but detaching it (drop or chain knock) RESCUES it — banked on win,
-        /// rescued critters join the My Reef aquarium. Same authoring rule as Stone:
+        /// like Stone — a pure in-level obstacle you clear by DETACHING it (drop or chain
+        /// knock), since it can never be popped by a match. No meta reward (the rescue-to-
+        /// aquarium collection was removed 2026-07-18). Same authoring rule as Stone:
         /// never on row 0. Critters can't be frozen ('C' is always uppercase).
         /// </summary>
         Critter

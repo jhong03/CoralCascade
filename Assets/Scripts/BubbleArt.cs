@@ -18,8 +18,12 @@ namespace CoralCascade
     {
         private const string ArtPath = "Art/Double/";
 
-        // Frost matches the old "washed toward icy white" lerp (62%), as a translucent layer.
-        private static readonly Color FrostTint = new Color(0.85f, 0.95f, 1f, 0.62f);
+        // Frozen bubbles wash their base tint toward this icy blue-white; FrostWash is how
+        // far (0..1). Applied on the ROOT orb tint (not a translucent overlay child — those
+        // world SpriteRenderers didn't render reliably; user-reported 2026-07-18 "the ice
+        // isn't visible"). Keep it under ~0.6 so the underlying color stays readable.
+        private static readonly Color FrostColor = new Color(0.80f, 0.92f, 1f);
+        private const float FrostWash = 0.55f;
 
         private static readonly Dictionary<string, Sprite> _cache = new Dictionary<string, Sprite>();
         private static bool _probed;
@@ -88,11 +92,14 @@ namespace CoralCascade
             // white on every color. Both are procedural — balls never need imported art.
             // "Critter" removal strips legacy children on refresh.
             sr.sprite = PrimitiveSprites.GlossyOrb();
-            sr.color = color.ToRGBA();
+            // Frozen bubbles read as pale, shiny ice-coated orbs: wash the tint toward icy
+            // white on the root renderer (guaranteed to render), keeping the gloss child so
+            // it still looks glassy. The color stays hinted so players know what to match
+            // once it thaws. Thaw calls Apply again with frozen=false → full color returns.
+            sr.color = frozen ? Color.Lerp(color.ToRGBA(), FrostColor, FrostWash) : color.ToRGBA();
             SetLayerChild(go, "Critter", null, Color.white, 1f, 0);
             SetLayerChild(go, "Gloss", PrimitiveSprites.OrbGloss(), Color.white, 1f, baseOrder + 1);
-            SetLayerChild(go, "Frost", frozen ? PrimitiveSprites.Circle() : null,
-                          FrostTint, 1f, baseOrder + 2);
+            SetLayerChild(go, "Frost", null, Color.white, 1f, 0); // legacy overlay child retired
         }
 
         /// <summary>Creates/updates/removes a named child sprite layer under the bubble root.</summary>

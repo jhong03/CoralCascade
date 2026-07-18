@@ -31,14 +31,17 @@ namespace CoralCascade
     /// 1–3 stars per CLEARED level. Thresholds scale with the layout's starting bubble
     /// count, so they stay meaningful across tiny intros and 80-bubble reefs:
     ///   1★ = cleared at all
-    ///   2★ = score ≥ 18 × bubbles  (real drop play — pure matching averages ~10–12/bubble)
-    ///   3★ = score ≥ 28 × bubbles  (heavy cascade play + banked shots)
+    ///   2★ = score ≥ 16 × bubbles  (real drop play — pure matching averages ~10–12/bubble)
+    ///   3★ = score ≥ 24 × bubbles  (heavy cascade play + banked shots)
     /// Best stars persist in PlayerPrefs. Constants are the balance dials.
+    /// Lowered 18/28 → 16/24 (2026-07-18): on obstacle-heavy boards 28× sat at/beyond the
+    /// practical score ceiling — stones inflate BubbleCount yet can't be matched/chained and
+    /// fragment cascades, so 3★ was effectively unreachable (user-reported on Reefs 8–10).
     /// </summary>
     public static class Stars
     {
-        public const int Star2PerBubble = 18;
-        public const int Star3PerBubble = 28;
+        public const int Star2PerBubble = 16;
+        public const int Star3PerBubble = 24;
 
         /// <summary>
         /// The score needed for the 2★ or 3★ rating on this layout (0 for unknown layouts —
@@ -75,15 +78,19 @@ namespace CoralCascade
     }
 
     /// <summary>
-    /// META CURRENCY for the My Reef aquarium (roadmap step 5). Earned by WINNING only —
-    /// purely cosmetic economy, never affects gameplay (user decision 2026-07-14).
+    /// META CURRENCY for the My Reef aquarium (roadmap step 5). Purely cosmetic economy,
+    /// never affects gameplay (user decision 2026-07-14). Pearls are a PROGRESS reward, not
+    /// a replay faucet (user-reported 2026-07-18: repeating a cleared level farmed pearls
+    /// infinitely). The base + per-star payout lands ONCE on first clear; re-clearing pays
+    /// only for genuine improvement (new stars beyond the old best, a new best score). The
+    /// award policy lives in GameFlow's win block — these are just the dials.
     /// </summary>
     public static class Pearls
     {
-        public const int WinBase = 10;
-        public const int PerStar = 5;
-        public const int FirstClearBonus = 15;
-        public const int NewBestBonus = 5;
+        public const int WinBase = 10;         // first clear only
+        public const int PerStar = 5;          // first clear: all stars; replay: newly-earned stars only
+        public const int FirstClearBonus = 15; // once, on first clear
+        public const int NewBestBonus = 5;     // each time a replay beats the stored best score
 
         private const string Key = "CoralCascade.Pearls";
 

@@ -66,7 +66,6 @@ namespace CoralCascade
         private int _endShotsLeft;   // banked shots: their +50s count up on the win screen
         private float _splashUntil;  // start-of-level target splash (tap or first shot skips)
         private int _pearlsEarned;   // aquarium currency granted by this win
-        private int _crittersSaved;  // rescues banked by this win (they join the reef)
 
         private MenuPage _menuPage = MenuPage.Intro; // boot lands on the launch splash
         private float _introShownAt; // staggers the splash animation + guards instant skips
@@ -125,6 +124,7 @@ namespace CoralCascade
         private Texture2D _mapGradientTex;
         private Texture2D _barShadowTex; // soft drop shadow under the in-level top bar
         private GUIStyle _titleStyle, _subtitleStyle, _buttonStyle, _barLabelStyle, _overlayTitleStyle;
+        private GUIStyle _barTitleStyle; // centered level title on its own top-bar row
         private GUIStyle _nodeStyle, _nodeBestStyle, _tabStyle, _tabActiveStyle, _panelStyle;
         private GUIStyle _meterLabelStyle, _shopSmallStyle, _cardStyle, _cardActiveStyle;
         private GUIStyle _chipStyle, _chipUrgentStyle, _nodeTextStyle, _chevronStyle, _rowStyle;
@@ -224,13 +224,17 @@ namespace CoralCascade
                 _finalScore = _manager.Score.Total;
                 bool won = _manager.State.State == GameState.Won;
                 _endShotsLeft = won ? _manager.State.ShotsRemaining : 0;
+                int prevStars = 0; // best stars BEFORE this run — drives the replay star-gain payout
                 if (won)
                 {
                     int idx = CurrentLevelIndex();
                     if (idx >= 0) Progress.MarkCleared(_playingSection.Key, idx + 1); // unlock next node
                     _earnedStars = Stars.Compute(_manager.CurrentLayout, _finalScore);
                     if (_manager.CurrentLayout != null)
+                    {
+                        prevStars = Stars.Get(_manager.CurrentLayout.Name); // read BEFORE Submit overwrites it
                         Stars.Submit(_manager.CurrentLayout.Name, _earnedStars);
+                    }
                 }
                 // First-clear must be read BEFORE the submit below records a best score.
                 bool firstClear = won && _manager.CurrentLayout != null &&
@@ -241,16 +245,24 @@ namespace CoralCascade
 
                 // Aquarium currency — wins only (purely cosmetic economy, see ReefStore).
                 _pearlsEarned = 0;
-                _crittersSaved = 0;
                 if (won)
                 {
-                    _pearlsEarned = Pearls.WinBase + Pearls.PerStar * _earnedStars
-                                  + (firstClear ? Pearls.FirstClearBonus : 0)
-                                  + (_newBest ? Pearls.NewBestBonus : 0);
+                    // Pearls are a PROGRESS reward, never a replay faucet: the base + per-star
+                    // payout lands ONCE, on first clear. Re-clearing a level pays only for
+                    // GENUINE improvement — stars newly earned beyond the old best (capped at
+                    // 3★ ever) and a new best score — so grinding a cleared level earns nothing.
+                    if (firstClear)
+                    {
+                        _pearlsEarned = Pearls.WinBase + Pearls.PerStar * _earnedStars
+                                      + Pearls.FirstClearBonus;
+                    }
+                    else
+                    {
+                        int newStars = Mathf.Max(0, _earnedStars - prevStars);
+                        _pearlsEarned = Pearls.PerStar * newStars
+                                      + (_newBest ? Pearls.NewBestBonus : 0);
+                    }
                     Pearls.Add(_pearlsEarned);
-                    // Rescued critters bank on WIN only — a loss leaves them trapped.
-                    _crittersSaved = _manager.CrittersRescued;
-                    ReefStore.AddRescued(_crittersSaved);
                 }
             }
             else if (!over)
@@ -578,6 +590,18 @@ namespace CoralCascade
             };
             _barLabelStyle.normal.textColor = DeepTeal;
             if (_fontBody != null) _barLabelStyle.font = _fontBody;
+
+            // Centered level title (its own top-bar row) — display font, a step up from the
+            // chip text so it reads as the screen's heading.
+            _barTitleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = (int)(19 * _scale),
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = false
+            };
+            _barTitleStyle.normal.textColor = DeepTeal;
+            if (_fontDisplay != null) { _barTitleStyle.font = _fontDisplay; _barTitleStyle.fontStyle = FontStyle.Normal; }
+            else if (_fontBody != null) _barTitleStyle.font = _fontBody;
 
             // Map nodes are bubbles: the button background is the shaded orb texture
             // (tint comes via GUI.backgroundColor at the draw site — baked shading makes
@@ -1488,15 +1512,6 @@ namespace CoralCascade
                 DrawTankFish(area, sandTop, ReefStore.PearlEel, 0, 1f, t, ReefHash("rare_eel", 0));
             }
 
-            // Rescued critters (freed in Adventure levels, banked on win) — every one swims.
-            int rescued = ReefStore.RescuedCount;
-            for (int k = 0; k < rescued; k++)
-            {
-                owned++;
-                DrawTankFish(area, sandTop, ReefStore.RescuedCritter, k, 1f, t,
-                             ReefHash("rescued", k));
-            }
-
             if (owned == 0)
                 GUI.Label(new Rect(area.x, area.y + area.height * 0.32f, area.width, 60f * _scale),
                           "Your reef is waiting.\nWin levels, earn pearls, fill it with life!",
@@ -1734,9 +1749,10 @@ namespace CoralCascade
 
         private void DrawTopBar()
         {
-            float row1H = 52f * _scale;
-            float meterH = 24f * _scale;
-            float h = row1H + meterH;
+            float titleH = 30f * _scale;   // dedicated, centered level-title row
+            float row1H = 52f * _scale;    // stat chips + pause
+            float meterH = 24f * _scale;   // star-target meter
+            float h = titleH + row1H + meterH;
             _topBarRect = new Rect(0, 0, Screen.width, h);
             // Frosted light bar over the bright water (deep-teal text sits on it), with a
             // soft shadow fading out below it so the bar reads as a layer, not a stripe.
@@ -1750,39 +1766,29 @@ namespace CoralCascade
                             ScaleMode.StretchToFill);
             GUI.color = oldBarColor;
 
+            // Level title gets its OWN centered row (user request 2026-07-18) — off the chip
+            // row, where a 3-chip tide layout squeezed it to a misleading clipped digit
+            // ("Level 18" showed as "1"). NodePrefix + number, e.g. "Level 18"; Daily (no
+            // section) shows its name.
+            int idx = CurrentLevelIndex();
+            string title = idx >= 0
+                ? $"{_playingSection.NodePrefix} {idx + 1}"
+                : (_manager.CurrentLayout != null ? _manager.CurrentLayout.Name : "");
+            GUI.Label(new Rect(0, 0, Screen.width, titleH), title, _barTitleStyle);
+
             float pad = 10f * _scale;
             float avail = Screen.width - pad * 2f;
-            GUILayout.BeginArea(new Rect(pad, 0, avail, row1H));
+            GUILayout.BeginArea(new Rect(pad, titleH, avail, row1H));
             GUILayout.BeginHorizontal(GUILayout.Height(row1H));
 
-            // Column budget (the shop-row lesson, applied to the HUD): chips and the pause
-            // button are measured first and the level label gets EXACTLY the remainder —
-            // on a narrow portrait screen the unbudgeted row crushed the label into a
-            // vertical sliver and shoved the buttons off the right edge (user-reported).
-            // Debug moved into the pause menu: a phone HUD has no room for a dev button.
+            // The title row now owns the level name, so the whole chip row is free for stats:
+            // chips left, pause right. Debug lives in the pause menu (no room on phone widths).
             string scoreText = $"Score  <b>{_manager.Score.Total}</b>";
             string shotsText = $"Shots  <b>{_manager.State.ShotsRemaining}</b>";
             string tideText = _manager.PressureActive
                 ? $"Tide  <b>{_manager.ShotsUntilPressure}</b>" : null;
-            float ChipW(string s) => _chipStyle.CalcSize(new GUIContent(s)).x + 2f;
             float btnH = row1H - 12f * _scale;
             float pauseW = btnH; // icon-sized square: "II"
-            float fixedW = ChipW(scoreText) + 6f * _scale + ChipW(shotsText)
-                         + (tideText != null ? ChipW(tideText) + 6f * _scale : 0f)
-                         + pauseW + 20f * _scale;
-            float labelW = avail - fixedW;
-
-            int idx = CurrentLevelIndex();
-            string name = _manager.CurrentLayout != null ? _manager.CurrentLayout.Name : "?";
-            string levelText = idx >= 0
-                ? $"<b>{_playingSection.NodePrefix} {idx + 1}</b>  {name}" : $"<b>{name}</b>";
-            // Too tight for the full title? Drop to the short form, then to nothing.
-            if (idx >= 0 && _barLabelStyle.CalcSize(new GUIContent(levelText)).x > labelW)
-                levelText = $"<b>{_playingSection.NodePrefix} {idx + 1}</b>";
-            if (labelW > 34f * _scale)
-                GUILayout.Label(levelText, _barLabelStyle,
-                                GUILayout.Width(labelW), GUILayout.ExpandHeight(true));
-            GUILayout.FlexibleSpace();
 
             // Stats live in pill chips so the HUD reads as designed UI, not floating text.
             GUILayout.Label(scoreText, _chipStyle);
@@ -1799,7 +1805,7 @@ namespace CoralCascade
                 GUILayout.Label(tideText, urgent ? _chipUrgentStyle : _chipStyle);
                 GUI.color = oldChipColor;
             }
-            GUILayout.Space(10f * _scale);
+            GUILayout.FlexibleSpace();
 
             GUILayout.BeginVertical(GUILayout.ExpandHeight(true));
             GUILayout.FlexibleSpace();
@@ -1812,7 +1818,7 @@ namespace CoralCascade
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
 
-            DrawStarMeter(new Rect(pad, row1H - 3f * _scale, Screen.width - pad * 2f, meterH));
+            DrawStarMeter(new Rect(pad, titleH + row1H - 3f * _scale, Screen.width - pad * 2f, meterH));
         }
 
         /// <summary>
@@ -1976,8 +1982,8 @@ namespace CoralCascade
                     break;
                 case "Critter":
                     title = "Trapped critters";
-                    body = "A critter is stuck in that bubble! Matches can't pop it —\n" +
-                           "DROP it free and it joins your reef when you win!";
+                    body = "A critter is stuck in that bubble — matches can't pop it.\n" +
+                           "Knock it loose by DROPPING it to clear the board.";
                     break;
                 default:
                     title = "The rising tide";
@@ -1990,9 +1996,13 @@ namespace CoralCascade
         /// <summary>Measured section height: title row + wrapped body, floor of the diagram stage.</summary>
         private float SectionHeight(string key, float textW)
         {
-            TutorialCopy(key, out _, out string body);
+            TutorialCopy(key, out string title, out string body);
+            // Measure BOTH the title and body — the display font is wide, so a short name
+            // like "Frozen bubbles" wraps to two lines in this narrow column. A hardcoded
+            // one-line title slot clipped the top of that wrap (user-reported 2026-07-18).
+            float titleH = _tutTitleStyle.CalcHeight(new GUIContent(title), textW);
             float bodyH = _tutBodyStyle.CalcHeight(new GUIContent(body), textW);
-            return Mathf.Max(112f * _scale, 30f * _scale + bodyH + 12f * _scale);
+            return Mathf.Max(112f * _scale, titleH + 6f * _scale + bodyH + 12f * _scale);
         }
 
         /// <summary>One tutorial row: animated diagram on a light stage, title + copy right.</summary>
@@ -2017,8 +2027,12 @@ namespace CoralCascade
                 case "Critter": DrawCritterDiagram(stage); break;
                 default: DrawTideDiagram(stage); break;
             }
-            GUI.Label(new Rect(text.x, text.y, text.width, 26f * _scale), title, _tutTitleStyle);
-            GUI.Label(new Rect(text.x, text.y + 28f * _scale, text.width, text.height - 28f * _scale),
+            // Title height is MEASURED (it can wrap to two lines); the body sits right below
+            // it. Matches the reservation in SectionHeight so nothing clips.
+            float titleH = _tutTitleStyle.CalcHeight(new GUIContent(title), text.width);
+            GUI.Label(new Rect(text.x, text.y, text.width, titleH), title, _tutTitleStyle);
+            float bodyY = text.y + titleH + 6f * _scale;
+            GUI.Label(new Rect(text.x, bodyY, text.width, text.yMax - bodyY),
                       body, _tutBodyStyle);
         }
 
@@ -2227,9 +2241,8 @@ namespace CoralCascade
             int buttons = won ? ((hasNext || introFinished) ? 3 : 2) : 2;
             float starRowH = won ? 88f * _scale : 0f; // stars + target line + pearls line
             float bonusRowH = won && _endShotsLeft > 0 ? 22f * _scale : 0f;
-            float critterRowH = won && _crittersSaved > 0 ? 22f * _scale : 0f;
             float fishRowH = BubbleArt.Get(won ? "fish_orange" : "fish_blue") != null ? 54f * _scale : 0f;
-            BeginPanel(w, 168f * _scale + starRowH + bonusRowH + critterRowH + fishRowH
+            BeginPanel(w, 168f * _scale + starRowH + bonusRowH + fishRowH
                           + buttons * (btnH + 10f * _scale), openT);
             string loseTitle = _manager.PressureLoss ? "THE TIDE ROSE!" : "OUT OF SHOTS";
             string loseSub = _manager.PressureLoss ? "The reef crossed the danger line."
@@ -2276,10 +2289,6 @@ namespace CoralCascade
                 GUILayout.Label(won ? $"Best  {best}" : $"Best (cleared)  {best}", _subtitleStyle);
             if (won && _pearlsEarned > 0)
                 GUILayout.Label($"+{_pearlsEarned} pearls for My Reef", _subtitleStyle);
-            if (won && _crittersSaved > 0)
-                GUILayout.Label(_crittersSaved == 1
-                    ? "1 critter rescued — it joins your reef!"
-                    : $"{_crittersSaved} critters rescued — they join your reef!", _subtitleStyle);
             GUILayout.Space(12f * _scale);
 
             if (hasNext && GUILayout.Button("Next Level", _buttonStyle, GUILayout.Height(btnH)))

@@ -33,7 +33,16 @@ namespace CoralCascade
         // colors the moment their color leaves the board (otherwise the pure randomizer can
         // hand out colors that no longer exist, making a level uncleaable).
         private readonly List<BubbleColor> _colorsOnBoard = new List<BubbleColor>();
+        private readonly List<int> _countsOnBoard = new List<int>();
         private int _boardVersionSeen = -1;
+
+        // Softened proportional draw: the queue favors colors that have MORE bubbles left,
+        // so a nearly-gone color stops being handed out as often as a full one (which just
+        // wasted shots on unplaceable balls). Blend of count-weighting and uniform —
+        // 1 = strict proportional (P = share), 0 = old uniform-over-distinct. The floor from
+        // the uniform term keeps the last few of a color appearing often enough to clear.
+        // TUNABLE: raise toward 1 to punish rare colors harder, lower to soften. See DrawColor.
+        private const float ColorWeightBias = 0.65f;
         private Board _boardSeen; // boards are REBUILT when the level width changes
 
         private Shot _lastShot;
@@ -168,13 +177,38 @@ namespace CoralCascade
         /// </summary>
         private BubbleColor DrawColor()
         {
-            _board.Board.CollectColors(_colorsOnBoard);
+            _board.Board.CollectColors(_colorsOnBoard, _countsOnBoard);
             if (_colorsOnBoard.Count == 0)
             {
                 var p = BubbleColorExtensions.Playable;
                 return p[Random.Range(0, p.Length)];
             }
-            return _colorsOnBoard[Random.Range(0, _colorsOnBoard.Count)];
+            return WeightedPick();
+        }
+
+        /// <summary>
+        /// Picks a color from <see cref="_colorsOnBoard"/> weighted by remaining count,
+        /// softened toward uniform by <see cref="ColorWeightBias"/>. Caller must have just
+        /// refreshed <see cref="_colorsOnBoard"/>/<see cref="_countsOnBoard"/> (non-empty).
+        /// weight(c) = bias·count(c)·n + (1−bias)·total  ⇒  P(c) = bias·share(c) + (1−bias)/n.
+        /// </summary>
+        private BubbleColor WeightedPick()
+        {
+            int n = _colorsOnBoard.Count;
+            int total = 0;
+            for (int i = 0; i < n; i++) total += _countsOnBoard[i];
+
+            float sum = 0f;
+            for (int i = 0; i < n; i++)
+                sum += ColorWeightBias * _countsOnBoard[i] * n + (1f - ColorWeightBias) * total;
+
+            float r = Random.value * sum;
+            for (int i = 0; i < n; i++)
+            {
+                r -= ColorWeightBias * _countsOnBoard[i] * n + (1f - ColorWeightBias) * total;
+                if (r <= 0f) return _colorsOnBoard[i];
+            }
+            return _colorsOnBoard[n - 1]; // float rounding guard
         }
 
         /// <summary>
@@ -183,18 +217,18 @@ namespace CoralCascade
         /// </summary>
         private void EnsureQueueMatchesBoard()
         {
-            _board.Board.CollectColors(_colorsOnBoard);
+            _board.Board.CollectColors(_colorsOnBoard, _countsOnBoard);
             if (_colorsOnBoard.Count == 0) return;
 
             bool changed = false;
             if (!_colorsOnBoard.Contains(_currentColor))
             {
-                _currentColor = _colorsOnBoard[Random.Range(0, _colorsOnBoard.Count)];
+                _currentColor = WeightedPick();
                 changed = true;
             }
             if (!_colorsOnBoard.Contains(_nextColor))
             {
-                _nextColor = _colorsOnBoard[Random.Range(0, _colorsOnBoard.Count)];
+                _nextColor = WeightedPick();
                 changed = true;
             }
             if (changed) RefreshLoadedBubble();
