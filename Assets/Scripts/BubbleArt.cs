@@ -69,6 +69,20 @@ namespace CoralCascade
                 return;
             }
 
+            if (color == BubbleColor.Critter)
+            {
+                // A trapped critter: fish inside a pale silvery bubble. The shell stays a
+                // NON-playable tint (no color to match — the read is "free me by dropping").
+                // Primitive fallback: the pale pink orb alone still reads as "not a color".
+                sr.sprite = PrimitiveSprites.GlossyOrb();
+                sr.color = new Color(0.94f, 0.97f, 1f);
+                SetLayerChild(go, "Critter", Available ? Load("fish_pink") : null,
+                              Color.white, 0.62f, baseOrder + 1);
+                SetLayerChild(go, "Gloss", PrimitiveSprites.OrbGloss(), Color.white, 1f, baseOrder + 2);
+                SetLayerChild(go, "Frost", null, Color.white, 1f, 0);
+                return;
+            }
+
             // Glossy orb (user-chosen design 2026-07-14): sphere-shaded white orb tinted per
             // color, with the white specular shine as an UNTINTED child layer so it stays
             // white on every color. Both are procedural — balls never need imported art.

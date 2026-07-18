@@ -3,6 +3,52 @@
 Mobile bubble shooter (Unity 6000.4.1f1, 2D URP, **new Input System only** — legacy `Input` throws).
 Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `CoralCascade_game_plan.md`.
 
+## Status (as of 2026-07-17)
+
+**2026-07-17 session — ADVENTURE RESTRUCTURE (30 → 50 levels, NOT yet committed/tested):**
+user-approved via question dialog: full restructure of Reefs 1–50 (old records orphaned,
+accepted), waves + rescue critters, challenging-but-fair endgame; critters = optional
+bonus, banked on WIN only.
+- **10 themed WAVES of 5** replace the smooth t-formulas: `LevelCatalog.Specs` is a
+  per-level table (cols/rows/colors/density/GUARANTEED stone-ice-critter counts +
+  sprinkle %/tide/danger margin/budget multiplier) — TUNE THE GAME IN THE TABLE, not in
+  formulas. Waves: First Dive 1–5, Stone Garden 6–10, Frozen Shallows 11–15 (5th color
+  14), Rising Tide 16–20, Critter Cove 21–25, Deepwater 26–30, Stonefall Trench 31–35
+  (6th color 34), Glacier Line 36–40, Storm Surge 41–45, The Abyss 46–50. Teaching order
+  now matches the Tutorial Reef (stone → ice → tide → critters). Wave rhythm: first level
+  breather, last milestone. Guaranteed mechanics via `ConvertCells` (deterministic
+  post-gen conversion of anchored cells; critters rows 2+, stones/ice rows 1+; anchoring
+  by construction untouched). `GenerateBalanced`: 9 candidate seeds per level, keep the
+  board closest to the candidates' MEDIAN bubble count (raw generator swung 28..77 on
+  identical specs — anchor-row luck; median pick restores authored pacing). Daily now
+  draws specs from the Reef 16–45 band. Budget formula gained obstacle taxes
+  (+0.4/stone+critter, +0.25/ice, sprinkles as expected counts); cap 40 → 45.
+  NOTE: the 45 cap binds from ~Reef 31 on (BudgetMul stops differentiating there —
+  late-game tuning lives in board mass/mechanics; revisit after play-test).
+- **CRITTERS (rescue mechanic):** `BubbleColor.Critter`, char 'C' — unmatchable/unfireable
+  like Stone (IsPlayable false ⇒ excluded from queue/palette/ceiling rows), never row 0,
+  never frozen. Rescue = DETACH (drop or chain knock): single choke point in
+  `CascadeController.DetachCells` → `BoardManager.NotifyCritterRescued` (run tally reset
+  in LoadLayout + "RESCUED!" floating text). Critters score as normal dropped/chain
+  bubbles (they're in BubbleCount, so star math stays consistent). Board-clear frees all
+  remaining critters EMERGENTLY (only row 0 anchors; critters never sit there ⇒ clearing
+  colors always drops them). Win block in GameFlow banks `_crittersSaved` via
+  `ReefStore.AddRescued` (WIN only), end overlay line (height budgeted), visual =
+  GlossyOrb pale shell + fish_pink child in `BubbleArt.Apply` (primitive fallback safe),
+  tutorial card added ("Critter" in TutorialFlags.AllIds, data-driven 'C' detection,
+  DrawCritterDiagram). Rescued critters swim in My Reef as `ReefStore.RescuedCritter`
+  (count at `CoralCascade.Reef.Rescued`, not buyable/sellable, fully grown, pale-pink
+  tint; drawn after the rares in DrawReefTank).
+- **Tank fish fix (user-reported "all at the top"):** DrawTankFish derived lane fractions
+  via `Frac(hugeHash * k)` — beyond float fractional precision, returned ~0 for every
+  fish. LESSON: modulo a hash to a SMALL int before float math. Fish now also GLIDE
+  vertically (hash-derived home depth ± slow sine over the column) plus the quick bob.
+- **Verification:** compile clean (all scripts); PS checker `check50.ps1` (scratchpad;
+  replicates generator + median pick + odd-r BFS) — all 50 reefs + 14 dailies zero
+  floating bubbles, all guaranteed counts placed. Curve eyeballed: mass 23→~58, breathers
+  dip, milestones peak. NOT play-tested; old bests/stars for Reef N keys are now orphaned
+  PlayerPrefs (harmless; Settings reset wipes).
+
 ## Status (as of 2026-07-16)
 
 **2026-07-16 session (all pushed):** UI QUALITY OVERHAUL — two passes (procedural: star
@@ -157,9 +203,9 @@ Build order (mechanics only; game design/art/effects pass comes later, user-led)
    screen-space IMGUI (world untouched); rares derived from star records at tab entry.
 
 Backlog after those (do NOT start without user): level objectives (score target / clear
-stones / rescue-critters-by-drop — rescued critters should go INTO the aquarium),
-cascade-earned power-up bubbles (bomb/rainbow — must stay skill-earned, not random, to
-preserve fairness), endless mode (reuses pressure + generator), share card, analytics.
+stones — rescue-critters DONE 2026-07-17, see Status), cascade-earned power-up bubbles
+(bomb/rainbow — must stay skill-earned, not random, to preserve fairness), endless mode
+(reuses pressure + generator), share card, analytics.
 
 Standing caution: the Phase 1 exit gate (human play-test of cascade FEEL) is still pending —
 feel tunables (ImpactThreshold, slow-mo, shot speed) may need revisiting before deep polish.

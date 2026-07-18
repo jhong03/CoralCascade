@@ -253,6 +253,12 @@ namespace CoralCascade
                 _tallySum += pos;
                 _tallyCount++;
 
+                // Rescue rule: a detached critter is FREED, whatever knocked it loose —
+                // match-adjacent drop, support cut, or chain impact. This is the single
+                // choke point every detachment passes through, so no path can miss one.
+                if (color == BubbleColor.Critter)
+                    _manager.NotifyCritterRescued(pos);
+
                 // Juice by cause — strictly after the deterministic resolution above.
                 var effects = PopEffects.Instance;
                 if (effects != null)

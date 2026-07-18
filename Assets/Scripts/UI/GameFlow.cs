@@ -66,6 +66,7 @@ namespace CoralCascade
         private int _endShotsLeft;   // banked shots: their +50s count up on the win screen
         private float _splashUntil;  // start-of-level target splash (tap or first shot skips)
         private int _pearlsEarned;   // aquarium currency granted by this win
+        private int _crittersSaved;  // rescues banked by this win (they join the reef)
 
         private MenuPage _menuPage = MenuPage.Intro; // boot lands on the launch splash
         private float _introShownAt; // staggers the splash animation + guards instant skips
@@ -240,12 +241,16 @@ namespace CoralCascade
 
                 // Aquarium currency — wins only (purely cosmetic economy, see ReefStore).
                 _pearlsEarned = 0;
+                _crittersSaved = 0;
                 if (won)
                 {
                     _pearlsEarned = Pearls.WinBase + Pearls.PerStar * _earnedStars
                                   + (firstClear ? Pearls.FirstClearBonus : 0)
                                   + (_newBest ? Pearls.NewBestBonus : 0);
                     Pearls.Add(_pearlsEarned);
+                    // Rescued critters bank on WIN only — a loss leaves them trapped.
+                    _crittersSaved = _manager.CrittersRescued;
+                    ReefStore.AddRescued(_crittersSaved);
                 }
             }
             else if (!over)
@@ -350,7 +355,7 @@ namespace CoralCascade
             _pendingTutorials.Clear();
             if (layout == null) return;
 
-            bool stone = false, ice = false;
+            bool stone = false, ice = false, critter = false;
             if (layout.CellRows != null)
             {
                 foreach (var row in layout.CellRows)
@@ -358,14 +363,17 @@ namespace CoralCascade
                     if (row == null) continue;
                     foreach (char ch in row)
                     {
-                        if (BubbleColorExtensions.FromChar(ch) == BubbleColor.Stone) stone = true;
-                        else if (char.IsLower(ch) && BubbleColorExtensions.FromChar(ch).IsPlayable()) ice = true;
+                        var c = BubbleColorExtensions.FromChar(ch);
+                        if (c == BubbleColor.Stone) stone = true;
+                        else if (c == BubbleColor.Critter) critter = true;
+                        else if (char.IsLower(ch) && c.IsPlayable()) ice = true;
                     }
                 }
             }
             if (stone && !TutorialFlags.Seen("Stone")) _pendingTutorials.Add("Stone");
             if (ice && !TutorialFlags.Seen("Ice")) _pendingTutorials.Add("Ice");
             if (layout.PressureEveryShots > 0 && !TutorialFlags.Seen("Tide")) _pendingTutorials.Add("Tide");
+            if (critter && !TutorialFlags.Seen("Critter")) _pendingTutorials.Add("Critter");
             if (_pendingTutorials.Count > 0) _tutorialShownAt = Time.unscaledTime;
         }
 
@@ -1480,6 +1488,15 @@ namespace CoralCascade
                 DrawTankFish(area, sandTop, ReefStore.PearlEel, 0, 1f, t, ReefHash("rare_eel", 0));
             }
 
+            // Rescued critters (freed in Adventure levels, banked on win) — every one swims.
+            int rescued = ReefStore.RescuedCount;
+            for (int k = 0; k < rescued; k++)
+            {
+                owned++;
+                DrawTankFish(area, sandTop, ReefStore.RescuedCritter, k, 1f, t,
+                             ReefHash("rescued", k));
+            }
+
             if (owned == 0)
                 GUI.Label(new Rect(area.x, area.y + area.height * 0.32f, area.width, 60f * _scale),
                           "Your reef is waiting.\nWin levels, earn pearls, fill it with life!",
@@ -1541,15 +1558,23 @@ namespace CoralCascade
             float hgt = unitH * px2unit;
 
             float laneTop = area.y + 108f * _scale; // clear of the shop button + goal lines
-            float laneBottom = sandTop - 40f * _scale - hgt;
-            float laneY = Mathf.Lerp(laneTop, Mathf.Max(laneTop, laneBottom), Frac(h * 0.7548f));
+            float laneBottom = Mathf.Max(laneTop, sandTop - 40f * _scale - hgt);
+            // Hash-derived fractions must come from a SMALL positive int: Frac(h * k) on the
+            // raw full-range hash exceeds float fractional precision and returned ~0 for every
+            // fish, pinning all of them to the tank top (user-reported). Modulo first.
+            int hp = h & 0x7fffffff;
+            float depth01 = (hp % 977) / 976f;            // home depth, spread over the column
+            float glideSpeed = 0.22f + (hp % 13) * 0.035f; // rad/s — a slow up/down cruise
+            float glidePhase = (hp % 61) * 0.29f;
+            float y01 = Mathf.Clamp01(depth01 + Mathf.Sin(t * glideSpeed + glidePhase) * 0.35f);
+            float laneY = Mathf.Lerp(laneTop, laneBottom, y01);
 
             float span = Mathf.Max(40f * _scale, area.width - w - 40f * _scale);
-            float speed = (26f + (h & 31)) * _scale; // px/s, per-fish
-            float k = t * speed + (h & 1023);
+            float speed = (26f + (hp & 31)) * _scale; // px/s, per-fish
+            float k = t * speed + (hp & 1023);
             float px = Mathf.PingPong(k, span);
             bool movingRight = ((int)(k / span) & 1) == 0;
-            float bob = Mathf.Sin(t * 1.9f + h) * 6f * _scale;
+            float bob = Mathf.Sin(t * 1.9f + (hp % 31)) * 6f * _scale;
 
             float x = area.x + 20f * _scale + px;
             float y = laneY + bob;
@@ -1949,6 +1974,11 @@ namespace CoralCascade
                     body = "Iced-over bubbles can't join a match.\n" +
                            "Pop a match right beside the ice to thaw it free.";
                     break;
+                case "Critter":
+                    title = "Trapped critters";
+                    body = "A critter is stuck in that bubble! Matches can't pop it —\n" +
+                           "DROP it free and it joins your reef when you win!";
+                    break;
                 default:
                     title = "The rising tide";
                     body = "Every few shots the tide pushes the reef DOWN.\n" +
@@ -1984,6 +2014,7 @@ namespace CoralCascade
             {
                 case "Stone": DrawStoneDiagram(stage); break;
                 case "Ice": DrawIceDiagram(stage); break;
+                case "Critter": DrawCritterDiagram(stage); break;
                 default: DrawTideDiagram(stage); break;
             }
             GUI.Label(new Rect(text.x, text.y, text.width, 26f * _scale), title, _tutTitleStyle);
@@ -2047,6 +2078,46 @@ namespace CoralCascade
             GUI.DrawTexture(new Rect(xIce, y, d, d), orb);
             GUI.color = new Color(0.85f, 0.95f, 1f, 0.62f * (1f - thaw));
             GUI.DrawTexture(new Rect(xIce, y, d, d), circle);
+            GUI.color = old;
+        }
+
+        /// <summary>
+        /// Two green supports pop, the critter's bubble drops, and the freed fish darts
+        /// off to the side. Loops on unscaled time, rect offsets only (tutorial rule).
+        /// </summary>
+        private void DrawCritterDiagram(Rect r)
+        {
+            float t = Frac(Time.unscaledTime / 3.0f);
+            var orb = PrimitiveSprites.GlossyOrb().texture;
+            var fish = BubbleArt.Get("fish_pink");
+            float d = r.width * 0.27f;
+            float y = r.y + r.height * 0.22f;
+            float x0 = r.x + (r.width - 3f * d) * 0.5f;
+
+            float popK = Mathf.Clamp01((t - 0.40f) / 0.12f);  // the supports shrink out...
+            float fall = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((t - 0.55f) / 0.22f))
+                         * (r.height * 0.34f);                // ...the bubble drops...
+            float free = Mathf.Clamp01((t - 0.78f) / 0.16f);  // ...and the fish darts away.
+
+            var old = GUI.color;
+            float g = d * (1f - popK);
+            if (g > 1f)
+            {
+                GUI.color = new Color(0.30f, 0.85f, 0.45f);
+                GUI.DrawTexture(new Rect(x0 + (d - g) * 0.5f, y + (d - g) * 0.5f, g, g), orb);
+                GUI.DrawTexture(new Rect(x0 + 2f * d + (d - g) * 0.5f, y + (d - g) * 0.5f, g, g), orb);
+            }
+            var pod = new Rect(x0 + d + free * r.width * 0.30f, y + fall - free * r.height * 0.12f, d, d);
+            if (free < 1f)
+            {
+                // The pale bubble shell fades out as the critter breaks loose.
+                GUI.color = new Color(0.94f, 0.97f, 1f, 1f - free);
+                GUI.DrawTexture(pod, orb);
+            }
+            var fr = new Rect(pod.x + pod.width * 0.19f, pod.y + pod.height * 0.19f,
+                              pod.width * 0.62f, pod.height * 0.62f);
+            if (fish != null) DrawSpriteGUI(fr, fish, false, Color.white);
+            else { GUI.color = new Color(1f, 0.72f, 0.82f); GUI.DrawTexture(fr, orb); }
             GUI.color = old;
         }
 
@@ -2156,8 +2227,9 @@ namespace CoralCascade
             int buttons = won ? ((hasNext || introFinished) ? 3 : 2) : 2;
             float starRowH = won ? 88f * _scale : 0f; // stars + target line + pearls line
             float bonusRowH = won && _endShotsLeft > 0 ? 22f * _scale : 0f;
+            float critterRowH = won && _crittersSaved > 0 ? 22f * _scale : 0f;
             float fishRowH = BubbleArt.Get(won ? "fish_orange" : "fish_blue") != null ? 54f * _scale : 0f;
-            BeginPanel(w, 168f * _scale + starRowH + bonusRowH + fishRowH
+            BeginPanel(w, 168f * _scale + starRowH + bonusRowH + critterRowH + fishRowH
                           + buttons * (btnH + 10f * _scale), openT);
             string loseTitle = _manager.PressureLoss ? "THE TIDE ROSE!" : "OUT OF SHOTS";
             string loseSub = _manager.PressureLoss ? "The reef crossed the danger line."
@@ -2204,6 +2276,10 @@ namespace CoralCascade
                 GUILayout.Label(won ? $"Best  {best}" : $"Best (cleared)  {best}", _subtitleStyle);
             if (won && _pearlsEarned > 0)
                 GUILayout.Label($"+{_pearlsEarned} pearls for My Reef", _subtitleStyle);
+            if (won && _crittersSaved > 0)
+                GUILayout.Label(_crittersSaved == 1
+                    ? "1 critter rescued — it joins your reef!"
+                    : $"{_crittersSaved} critters rescued — they join your reef!", _subtitleStyle);
             GUILayout.Space(12f * _scale);
 
             if (hasNext && GUILayout.Button("Next Level", _buttonStyle, GUILayout.Height(btnH)))

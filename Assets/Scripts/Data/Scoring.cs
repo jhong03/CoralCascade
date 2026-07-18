@@ -162,7 +162,7 @@ namespace CoralCascade
     public static class TutorialFlags
     {
         /// <summary>Every mechanic id that has a tutorial card.</summary>
-        public static readonly string[] AllIds = { "Stone", "Ice", "Tide" };
+        public static readonly string[] AllIds = { "Stone", "Ice", "Tide", "Critter" };
 
         private static string Key(string id) => "CoralCascade.Tutorial." + id;
 

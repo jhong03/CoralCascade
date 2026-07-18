@@ -24,7 +24,15 @@ namespace CoralCascade
         /// support or knock it loose). Authoring rule: never place stone on row 0, or it
         /// becomes permanently unremovable and the level unwinnable.
         /// </summary>
-        Stone
+        Stone,
+
+        /// <summary>
+        /// A trapped sea creature (waves feature, 2026-07-17): unmatchable and unfireable
+        /// like Stone, but detaching it (drop or chain knock) RESCUES it — banked on win,
+        /// rescued critters join the My Reef aquarium. Same authoring rule as Stone:
+        /// never on row 0. Critters can't be frozen ('C' is always uppercase).
+        /// </summary>
+        Critter
     }
 
     public static class BubbleColorExtensions
@@ -52,6 +60,7 @@ namespace CoralCascade
                 case BubbleColor.Blue:   return new Color(0.25f, 0.55f, 0.90f);
                 case BubbleColor.Purple: return new Color(0.65f, 0.35f, 0.85f);
                 case BubbleColor.Stone:  return new Color(0.42f, 0.42f, 0.46f);
+                case BubbleColor.Critter: return new Color(1.00f, 0.72f, 0.82f);
                 default:                 return new Color(0f, 0f, 0f, 0f);
             }
         }
@@ -68,13 +77,14 @@ namespace CoralCascade
                 case BubbleColor.Blue:   return 'B';
                 case BubbleColor.Purple: return 'P';
                 case BubbleColor.Stone:  return 'S';
+                case BubbleColor.Critter: return 'C';
                 default:                 return '.';
             }
         }
 
-        /// <summary>True for the six fireable/matchable colors (excludes None and Stone).</summary>
+        /// <summary>True for the six fireable/matchable colors (excludes None, Stone, Critter).</summary>
         public static bool IsPlayable(this BubbleColor c) =>
-            c != BubbleColor.None && c != BubbleColor.Stone;
+            c != BubbleColor.None && c != BubbleColor.Stone && c != BubbleColor.Critter;
 
         /// <summary>
         /// Parse a layout char into a color. '.', ' ', '_' and '0' all mean empty.
@@ -93,6 +103,7 @@ namespace CoralCascade
                 case 'B': return BubbleColor.Blue;
                 case 'P': return BubbleColor.Purple;
                 case 'S': return BubbleColor.Stone;
+                case 'C': return BubbleColor.Critter;
                 case '.':
                 case ' ':
                 case '_':
