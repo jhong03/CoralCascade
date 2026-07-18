@@ -3,6 +3,33 @@
 Mobile bubble shooter (Unity 6000.5.3f1, 2D URP, **new Input System only** — legacy `Input` throws).
 Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `CoralCascade_game_plan.md`.
 
+## Status (as of 2026-07-19)
+
+**2026-07-19 — TIDE RETUNE (committed; compile- + generator-verified, NOT play-tested).**
+User-reported: "impossible to win level 18, too few moves before tide rises." Verified with
+the scratchpad generator replication — it was a WAVE-WIDE bug, not just Reef 18:
+
+- **Diagnosis.** Reefs 16–20 needed **1.77–2.10 bubbles cleared PER SHOT** to win (fair is
+  ~1.3): Reef 18 = 40 starting bubbles **+23 dumped by the tide** in only 33 shots. Worse,
+  "shots left after the LAST tide drop" was **0 on Reefs 16 & 19** — the tide dumped a fresh
+  ~8-bubble row on the final shot with no shots to clear it = **guaranteed loss even with
+  perfect play**. Root cause: the budget granted only **+31%** shots for the tide while the
+  tide added **+58%** bubbles, and the extra shots just triggered MORE drops (self-defeating).
+- **Fix — three dials moved together** (user chose the "fullest fix"):
+  1. `LevelCatalog.TideIntervalBump = 5` — a single GLOBAL dial added to every authored
+     `spec.TideEvery` in `Generate` (so re-tuning the tide never means editing 30 spec rows;
+     the Specs table keeps its original cadence numbers). Wave 4 now drops every 15, not 10.
+  2. `BoardManager.PressureRowFill 0.7 → 0.5` — lighter ceiling rows (~5.5 bubbles/drop, not
+     ~7.7). **Coupled to the budget formula — CHANGE TOGETHER.**
+  3. Budget tide factor `0.4 → 1.6` (and it now uses 0.5, the new fill); shot cap 45 → 50.
+- **Verified** (Reefs 16–20): NeedRate now **1.27–1.42**, shots-after-last-drop **6–13** (no
+  more auto-loss). Reef 18: 40 bubbles / 40 shots / drops every 15 / NeedRate 1.27.
+- NOTE: the tutorial **RisingTide** board (Intro 8) is hand-authored, so `TideIntervalBump`
+  does NOT apply to it (still every 3 shots) — it only gets the lighter rows, i.e. slightly
+  easier. Dailies DO get the full retune (they route through `Generate`).
+- All tide reefs' shot budgets changed ⇒ their old best/star records are effectively
+  re-based (harmless; scores just get easier to beat).
+
 ## Status (as of 2026-07-18)
 
 **2026-07-18 session — PLAY-TEST FIXES (committed & pushed; compile-verified, generator-

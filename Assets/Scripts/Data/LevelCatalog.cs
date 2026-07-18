@@ -208,6 +208,13 @@ namespace CoralCascade
 
         // ---- Generation ----------------------------------------------------------------------
 
+        /// <summary>
+        /// Shots added to every authored tide interval (see the TIDE RETUNE note in Generate).
+        /// The Specs table keeps its original cadence numbers; this is the single global dial
+        /// that slows them all down, so re-tuning the tide never means editing 30 rows.
+        /// </summary>
+        private const int TideIntervalBump = 5;
+
         private static BoardLayoutData Generate(string name, int seed, LevelSpec spec)
         {
             // Deterministic: never UnityEngine.Random here. Same seed + spec = same board.
@@ -282,24 +289,31 @@ namespace CoralCascade
                 foreach (char ch in grid[r]) if (ch != '.') bubbles++;
             }
 
-            int pressureEvery = spec.TideEvery;
+            // TIDE RETUNE 2026-07-19 (user-reported: Reef 18 unwinnable). The tide was
+            // outrunning the player — a 70%-fill row every ~10 shots added ~58% more bubbles
+            // while the budget only granted +31% more shots, so tide levels demanded ~1.9-2.1
+            // bubbles cleared PER SHOT to win, and on some reefs a drop landed on the final
+            // shot (zero shots to clear it = guaranteed loss). Three dials moved together:
+            // drops are RARER (TideIntervalBump), rows are LIGHTER (PressureRowFill 0.7→0.5),
+            // and the budget compensates far more (0.4 → 1.6). Verified: the wave now needs
+            // ~1.27-1.42/shot with 6-13 shots of recovery after the last drop.
+            int pressureEvery = spec.TideEvery > 0 ? spec.TideEvery + TideIntervalBump : 0;
             int dangerRow = pressureEvery > 0 ? Math.Min(14, rows + spec.DangerMargin) : 0;
 
             // Shot budget accounts for what makes shots miss: base 0.5/bubble; obstacles
             // and critters need DROPS, not matches (+0.4 each, ice +0.25 for the thaw
             // detour — sprinkles enter as expected counts); +12% per color beyond 4;
-            // + ~40% of the expected tide influx per shot (fresh anchor rows clear
-            // cheaply; 0.7 = BoardManager.PressureRowFill, change together). The wave's
-            // BudgetMul is the fairness dial on top. Cap raised 40 → 45 for the Abyss
-            // boards; the cascade shot-refund (BoardManager) carries the rest.
+            // + the expected tide influx per shot (0.5 = BoardManager.PressureRowFill,
+            // CHANGE TOGETHER). The wave's BudgetMul is the fairness dial on top. Cap
+            // 45 → 50; the cascade shot-refund (BoardManager) carries the rest.
             int hardCount = spec.Stones + spec.Critters;
             double softCount = bubbles * (spec.StonePct + spec.IcePct);
             double budget = bubbles * 0.5 + hardCount * 0.4 + spec.Ice * 0.25 + softCount * 0.35;
             budget *= 1.0 + 0.12 * (spec.Colors - 4);
             if (pressureEvery > 0)
-                budget *= 1.0 + 0.4 * (columns * 0.7 / pressureEvery);
+                budget *= 1.0 + 1.6 * (columns * 0.5 / pressureEvery);
             budget *= spec.BudgetMul;
-            int shots = Math.Max(10, Math.Min(45, (int)Math.Round(budget)));
+            int shots = Math.Max(10, Math.Min(50, (int)Math.Round(budget)));
 
             return new BoardLayoutData(name, columns, cellRows, shots,
                                        pressureEvery, dangerRow);

@@ -70,8 +70,10 @@ namespace CoralCascade
         public int RefundThreshold = 8;
 
         /// <summary>Fill chance per cell of a descending ceiling row (balance dial —
-        /// LevelCatalog's shot budgets assume this value).</summary>
-        public const float PressureRowFill = 0.7f;
+        /// LevelCatalog's shot budgets assume this value, CHANGE TOGETHER). Lowered
+        /// 0.7 → 0.5 on 2026-07-19: full rows made the tide add bubbles faster than any
+        /// player could clear them (see the TIDE RETUNE note in LevelCatalog.Generate).</summary>
+        public const float PressureRowFill = 0.5f;
 
         public void Init(BoardView boardView, CascadeController cascade,
                          Launcher launcher, Transform projectileRoot,
