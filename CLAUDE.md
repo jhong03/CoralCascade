@@ -30,6 +30,17 @@ the scratchpad generator replication — it was a WAVE-WIDE bug, not just Reef 1
 - All tide reefs' shot budgets changed ⇒ their old best/star records are effectively
   re-based (harmless; scores just get easier to beat).
 
+**2026-07-19 — MECHANIC GUIDES NOW REPEAT ON EVERY LEVEL START** (user request; they used
+to be first-encounter-only). `QueueMechanicTutorials` no longer gates on
+`TutorialFlags.Seen` — every mechanic the board actually contains queues its card on every
+start, restarts included. Seen-flags are STILL written, but now only to choose the heading:
+a genuine first meeting keeps the "NEW DISCOVERY!"/"NEW DISCOVERIES!" moment, a repeat reads
+"THIS REEF HAS" (`_tutorialHasNew`, set by the new `QueueTutorial` helper). Everything else
+is unchanged: the card is modal and blocks aiming until "Got it", and the star-target splash
+still defers until it closes. Settings → "Replay mechanic guides" still works (it now only
+resets the heading back to "new"). NOTE: on a 3-mechanic reef this is a tall card before
+EVERY play — user accepted that trade when picking this over a non-blocking splash line.
+
 ## Status (as of 2026-07-18)
 
 **2026-07-18 session — PLAY-TEST FIXES (committed & pushed; compile-verified, generator-

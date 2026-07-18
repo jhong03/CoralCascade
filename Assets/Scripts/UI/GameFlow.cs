@@ -70,11 +70,12 @@ namespace CoralCascade
         private MenuPage _menuPage = MenuPage.Intro; // boot lands on the launch splash
         private float _introShownAt; // staggers the splash animation + guards instant skips
 
-        // First-encounter mechanic tutorials (Stone / Ice / Tide): queued when a loaded
-        // level contains a mechanic the player has never met, drawn as a MODAL card that
-        // only the player's "Got it" dismisses — it never times out or fades on its own.
+        // Mechanic guides (Stone / Ice / Tide / Critter): queued on EVERY level start for
+        // every mechanic the board contains, drawn as a MODAL card that only the player's
+        // "Got it" dismisses — it never times out or fades on its own.
         private readonly List<string> _pendingTutorials = new List<string>();
         private float _tutorialShownAt;
+        private bool _tutorialHasNew; // any queued mechanic met for the FIRST time (heading only)
 
         // Settings page: destructive reset needs a second tap while armed; small feedback
         // notes ("Guides will show again.") linger for a moment under the buttons.
@@ -358,9 +359,9 @@ namespace CoralCascade
         }
 
         /// <summary>
-        /// Detects mechanics in the LOADED LEVEL DATA that the player has never met and
-        /// queues their tutorial cards. Data-driven (chars + pressure field), so it works
-        /// identically for authored intros, generated reefs and Dailies.
+        /// Detects every mechanic present in the LOADED LEVEL DATA and queues its guide card
+        /// — on EVERY start, so each level always briefs what it contains. Data-driven (chars
+        /// + pressure field), so it works identically for authored intros, reefs and Dailies.
         /// </summary>
         private void QueueMechanicTutorials(BoardLayoutData layout)
         {
@@ -382,11 +383,23 @@ namespace CoralCascade
                     }
                 }
             }
-            if (stone && !TutorialFlags.Seen("Stone")) _pendingTutorials.Add("Stone");
-            if (ice && !TutorialFlags.Seen("Ice")) _pendingTutorials.Add("Ice");
-            if (layout.PressureEveryShots > 0 && !TutorialFlags.Seen("Tide")) _pendingTutorials.Add("Tide");
-            if (critter && !TutorialFlags.Seen("Critter")) _pendingTutorials.Add("Critter");
+            // EVERY level start re-shows the guides for EVERY mechanic on this board (user
+            // request 2026-07-19) — no longer first-encounter-only. The seen-flags are still
+            // recorded, but now only to pick the heading: a genuine first meeting keeps the
+            // "NEW DISCOVERY!" moment; a repeat reads as a reef briefing.
+            _tutorialHasNew = false;
+            if (stone) QueueTutorial("Stone");
+            if (ice) QueueTutorial("Ice");
+            if (layout.PressureEveryShots > 0) QueueTutorial("Tide");
+            if (critter) QueueTutorial("Critter");
             if (_pendingTutorials.Count > 0) _tutorialShownAt = Time.unscaledTime;
+        }
+
+        /// <summary>Queues one mechanic card, remembering whether it's a genuine first meeting.</summary>
+        private void QueueTutorial(string id)
+        {
+            if (!TutorialFlags.Seen(id)) _tutorialHasNew = true;
+            _pendingTutorials.Add(id);
         }
 
         private void Pause()
@@ -411,7 +424,7 @@ namespace CoralCascade
             _paused = false;
             _endSeen = false;
             _manager.LoadLayout(_manager.CurrentLayout); // sets timescale back to 1 itself
-            QueueMechanicTutorials(_manager.CurrentLayout); // no-op once flags are seen
+            QueueMechanicTutorials(_manager.CurrentLayout); // re-shown on every start, incl. restarts
             _splashUntil = _pendingTutorials.Count > 0 ? 0f : Time.unscaledTime + SplashSeconds;
         }
 
@@ -1947,8 +1960,11 @@ namespace CoralCascade
             foreach (var key in _pendingTutorials)
                 total += SectionHeight(key, textW) + 8f * _scale;
             BeginPanel(w, 52f * _scale + total + btnH + 20f * _scale, openT);
-            GUILayout.Label(_pendingTutorials.Count > 1 ? "NEW DISCOVERIES!" : "NEW DISCOVERY!",
-                            _overlayTitleStyle);
+            // A genuine first meeting keeps the discovery moment; a repeat is a reef briefing.
+            string heading = _tutorialHasNew
+                ? (_pendingTutorials.Count > 1 ? "NEW DISCOVERIES!" : "NEW DISCOVERY!")
+                : "THIS REEF HAS";
+            GUILayout.Label(heading, _overlayTitleStyle);
             GUILayout.Space(8f * _scale);
             foreach (var key in _pendingTutorials)
             {
