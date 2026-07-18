@@ -3,6 +3,45 @@
 Mobile bubble shooter (Unity 6000.5.3f1, 2D URP, **new Input System only** — legacy `Input` throws).
 Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `CoralCascade_game_plan.md`.
 
+## NEXT SESSION — start here
+
+Everything from the 2026-07-18/19 play-test sessions is **committed & pushed** (3 commits:
+`b9aa9de` fixes, `fcba971` tide retune, `296c06a` mechanic guides). Working tree is clean
+apart from pre-existing Unity churn (see "Uncommitted" below).
+
+**THE GATE: none of it is play-tested.** All changes are compile-verified, and the reef
+math is generator-verified, but nothing below has been seen running. Worth checking first:
+1. **3-row top bar** — centered "Level N" reads well? Taller bar (106px·scale, camera
+   reservation 114f) doesn't crowd the top bubbles?
+2. **Ice visible?** Frozen bubbles should now be pale icy-blue (root-tint wash).
+3. **Reef 10 winnable?** It was PROVEN dead before the stone-placement fix.
+4. **Tide feel** (Reefs 16–20) — retuned from "impossible" to ~1.27–1.42 needed/shot. If it
+   now feels toothless, `LevelCatalog.TideIntervalBump` (5) is the one number to walk back.
+5. **Tutorial-card friction** — guides now re-show on EVERY level start; on a 3-mechanic
+   reef that's a tall modal before every play, including retries. Walk-backs if it grates:
+   skip on restart-only, or use a compact splash line for repeats + full cards for firsts.
+
+**Deferred / residual (my flags, user-aware):**
+- **Critters can still sit at row 2** — same seal risk stones just had fixed; lower risk
+  (droppable, single) but the same class of bug. Applying the rows-3+/interior rule to
+  critters was offered and NOT done.
+- **Full winnability/reachability solver** in candidate selection — OFFERED and DEFERRED in
+  favour of the cheaper stone placement rule. Nothing yet *proves* a generated board is
+  clearable; the stone rule only removes the known mechanism.
+- **Tutorial RisingTide (Intro 8)** keeps its every-3-shots cadence (`TideIntervalBump`
+  applies to generated reefs only); it only got the lighter rows.
+- Old best/star records for stone + tide reefs are orphaned/re-based (accepted).
+
+**Still open from earlier sessions (untouched):** the in-level ReefBackdrop world-
+SpriteRenderer bug (pale untextured quads); camera framing off a hardcoded 9:19.5 aspect
+(21:9 phones clip outer columns, tablets show a small board); no `Screen.safeArea` insets.
+
+**Uncommitted (NOT mine, left alone all session — decide whether to keep):**
+`ProjectVersion.txt` (now 6000.5.3f1), `Packages/manifest.json` + `packages-lock.json`,
+`UniversalRenderPipelineGlobalSettings.asset`, `EditorBuildSettings.asset`,
+`PackageManagerSettings.asset`, `ShaderGraphSettings.asset`, and untracked
+`ProjectSettings/PhysicsCoreProjectSettings2D.asset`.
+
 ## Status (as of 2026-07-19)
 
 **2026-07-19 — TIDE RETUNE (committed; compile- + generator-verified, NOT play-tested).**
