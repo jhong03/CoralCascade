@@ -35,6 +35,10 @@ namespace CoralCascade.EditorTools
         public static void Apply()
         {
             var log = new StringBuilder("Coral Cascade — applying release settings\n");
+            if (!AndroidModuleInstalled)
+                log.AppendLine("  WARNING           Android Build Support is NOT installed — the " +
+                               "settings below will save, but icons cannot be assigned and no " +
+                               "APK/AAB can be built until you add the module in Unity Hub.");
 
             PlayerSettings.companyName = "jhong03";
             PlayerSettings.productName = "Coral Cascade";
@@ -99,13 +103,38 @@ namespace CoralCascade.EditorTools
                 PlayerSettings.SetPlatformIcons(NamedBuildTarget.Android, kind, icons);
                 kindCount++;
             }
-            log.AppendLine($"  icons             {kindCount} Android icon kinds assigned");
+            if (kindCount == 0)
+                log.AppendLine("  ICONS NOT SET     Android reports no icon kinds — is Android " +
+                               "Build Support installed? (Unity Hub ▸ Add modules)");
+            else
+                log.AppendLine($"  icons             {kindCount} Android icon kinds assigned");
         }
+
+        /// <summary>
+        /// True when this editor can actually build for Android. Without the module the
+        /// Android player settings still SERIALISE fine (so the inspector looks configured)
+        /// but icons cannot be assigned and no APK/AAB can be produced — which surfaces as
+        /// a baffling "no launcher icon" instead of the real cause. Check it first.
+        /// </summary>
+        private static bool AndroidModuleInstalled =>
+            BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Android, BuildTarget.Android);
 
         [MenuItem("Coral Cascade/Play Store/Verify Release Settings")]
         public static void Verify()
         {
             var problems = new List<string>();
+
+            if (!AndroidModuleInstalled)
+            {
+                // Everything else is moot until this is fixed, so report it alone.
+                Debug.LogError(
+                    "Coral Cascade — ANDROID BUILD SUPPORT IS NOT INSTALLED. No APK/AAB can be " +
+                    "built and launcher icons cannot be assigned.\n" +
+                    "  Fix: Unity Hub ▸ Installs ▸ 6000.5.3f1 ▸ gear ▸ Add modules ▸ " +
+                    "Android Build Support (tick OpenJDK and Android SDK & NDK Tools too).\n" +
+                    "  Then re-run Coral Cascade ▸ Play Store ▸ Apply Release Settings.");
+                return;
+            }
 
             if (PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.Android) != AppId)
                 problems.Add("application identifier is not " + AppId);
@@ -142,9 +171,27 @@ namespace CoralCascade.EditorTools
                 Debug.Log("Coral Cascade — release settings OK.");
                 return;
             }
-            var sb = new StringBuilder("Coral Cascade — release settings NOT ready:\n");
+            // The Unity console list shows only the FIRST LINE of a message, so put the
+            // summary there — "NOT ready:" on its own tells you nothing without clicking.
+            var headline = new StringBuilder("Coral Cascade — ")
+                .Append(problems.Count).Append(problems.Count == 1 ? " problem: " : " problems: ");
+            for (int i = 0; i < problems.Count; i++)
+            {
+                if (i > 0) headline.Append("; ");
+                headline.Append(Summarise(problems[i]));
+            }
+            var sb = new StringBuilder(headline.ToString()).AppendLine();
             foreach (var p in problems) sb.AppendLine("  • " + p);
             Debug.LogWarning(sb.ToString());
+        }
+
+        /// <summary>First few words of a problem, for the one-line console summary.</summary>
+        private static string Summarise(string problem)
+        {
+            int cut = problem.IndexOf(" — ");
+            if (cut < 0) cut = problem.IndexOf(" (");
+            string s = cut > 0 ? problem.Substring(0, cut) : problem;
+            return s.Length <= 46 ? s : s.Substring(0, 44) + "…";
         }
     }
 }

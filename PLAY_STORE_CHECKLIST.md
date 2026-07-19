@@ -33,6 +33,15 @@ then **Verify Release Settings** to print what's still missing. Both are re-runn
 
 ## 2. Still to do — blocking
 
+- [ ] **INSTALL ANDROID BUILD SUPPORT.** Discovered 2026-07-20: this editor has only
+      WebGL and Windows player modules, so **no APK/AAB can be built at all**, and launcher
+      icons cannot be assigned (which is why Verify reported a confusing "no launcher icon").
+      The Android *settings* serialise fine without the module, so the inspector looks
+      configured — nothing warns you until you try to build.
+      > Unity Hub ▸ Installs ▸ 6000.5.3f1 ▸ ⚙ ▸ Add modules ▸ **Android Build Support**,
+      > including **OpenJDK** and **Android SDK & NDK Tools**.
+      Then re-run **Apply Release Settings** so the icons land.
+
 - [ ] **Keystore.** Not created deliberately: it needs a password that must not live in the
       repo. Create an upload key, enable Play App Signing, and **back the keystore up** —
       losing it means you can never update the app.
