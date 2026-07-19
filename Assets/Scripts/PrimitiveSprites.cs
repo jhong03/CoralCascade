@@ -14,6 +14,8 @@ namespace CoralCascade
         private static Sprite _orb;
         private static Sprite _gloss;
         private static Sprite _star;
+        private static Sprite _stoneOrb;
+        private static Sprite _critterOrb;
         private static Material _unlit;
         private static readonly Dictionary<Color, Texture2D> _rounded = new Dictionary<Color, Texture2D>();
         private static readonly Dictionary<Color, Texture2D> _shadedRects = new Dictionary<Color, Texture2D>();
@@ -157,6 +159,134 @@ namespace CoralCascade
             _gloss = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
             _gloss.name = "OrbGloss";
             return _gloss;
+        }
+
+        /// <summary>
+        /// STONE, fully baked (2026-07-19): a matte, faceted, mottled grey rock. Everything
+        /// is in this ONE root sprite — colours included, so callers tint it white — because
+        /// the previous stone was the imported `rock_a` and imported pack sprites do not
+        /// render reliably on in-level world SpriteRenderers (the open 2026-07-16 bug; it
+        /// also hid the ice, and left critters as featureless white balls until a user asked
+        /// "what is this white ball?"). Deliberately has NO specular: matte reads unmatchable
+        /// next to the glossy playable orbs, which is the whole job of the visual.
+        /// </summary>
+        public static Sprite StoneOrb()
+        {
+            if (_stoneOrb != null) return _stoneOrb;
+
+            const int size = 128;
+            float center = (size - 1) * 0.5f;
+            float radius = size * 0.5f;
+            const float lx = -0.42f, ly = 0.52f, lz = 0.744f;
+
+            var tex = NewTex(size);
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = (x - center) / radius;
+                    float dy = (y - center) / radius;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    float a = Mathf.Clamp01((1f - d) * radius / 1.5f);
+                    if (a <= 0f) { pixels[y * size + x] = new Color(1f, 1f, 1f, 0f); continue; }
+
+                    float nz = Mathf.Sqrt(Mathf.Max(0f, 1f - d * d));
+                    float lambert = Mathf.Clamp01(dx * lx + dy * ly + nz * lz);
+                    // Quantised into three bands: flat facets, not a smooth ball.
+                    float faceted = Mathf.Floor(lambert * 3f) / 3f;
+                    float lum = 0.52f + 0.34f * faceted;
+                    // Deterministic speckle so the surface reads as grainy rock.
+                    lum += (Hash01(x * 7 + y * 131) - 0.5f) * 0.11f;
+                    lum *= 1f - 0.30f * Mathf.SmoothStep(0.70f, 1f, d); // heavy rim shadow
+                    lum = Mathf.Clamp01(lum);
+                    // Cool blue-grey; slightly desaturated toward the shadowed side.
+                    pixels[y * size + x] = new Color(lum * 0.86f, lum * 0.88f, lum * 0.96f, a);
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            _stoneOrb = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            _stoneOrb.name = "StoneOrb";
+            return _stoneOrb;
+        }
+
+        /// <summary>
+        /// CRITTER, fully baked (2026-07-19): a coral fish silhouette sealed inside a pale
+        /// silvery bubble, shell shading + specular + fish all in ONE root sprite. Same
+        /// reason as <see cref="StoneOrb"/> — the fish used to be an imported `fish_pink`
+        /// CHILD renderer, which is exactly the combination that does not draw in-level, so
+        /// the bubble read as a blank white ball with no hint of what it was.
+        /// </summary>
+        public static Sprite CritterOrb()
+        {
+            if (_critterOrb != null) return _critterOrb;
+
+            const int size = 128;
+            float center = (size - 1) * 0.5f;
+            float radius = size * 0.5f;
+            const float lx = -0.42f, ly = 0.52f, lz = 0.744f;
+            var shell = new Color(0.93f, 0.96f, 1f);
+            var fish = new Color(1f, 0.47f, 0.62f);
+            var fishDark = new Color(0.80f, 0.28f, 0.44f);
+
+            var tex = NewTex(size);
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = (x - center) / radius;
+                    float dy = (y - center) / radius;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    float a = Mathf.Clamp01((1f - d) * radius / 1.5f);
+                    if (a <= 0f) { pixels[y * size + x] = new Color(1f, 1f, 1f, 0f); continue; }
+
+                    Color c = shell;
+
+                    // ---- The fish, drawn in the orb's normalised space ----
+                    // Body ellipse, nosing left; tail wedge trailing right.
+                    float bx = (dx + 0.08f) / 0.40f, by = dy / 0.25f;
+                    bool body = bx * bx + by * by <= 1f;
+                    bool tail = dx > 0.26f && dx < 0.60f &&
+                                Mathf.Abs(dy) <= 0.04f + (dx - 0.26f) * 0.78f;
+                    // Outline band just outside the body keeps it legible on the pale shell.
+                    float bo = (dx + 0.08f) / 0.46f, byo = dy / 0.30f;
+                    bool bodyOutline = bo * bo + byo * byo <= 1f;
+
+                    if (body || tail) c = fish;
+                    else if (bodyOutline) c = fishDark;
+                    float eyeX = dx + 0.23f, eyeY = dy - 0.08f;
+                    if (body && eyeX * eyeX + eyeY * eyeY <= 0.055f * 0.055f) c = fishDark;
+
+                    // ---- Shell shading over everything, so the fish sits INSIDE ----
+                    float nz = Mathf.Sqrt(Mathf.Max(0f, 1f - d * d));
+                    float lambert = Mathf.Clamp01(dx * lx + dy * ly + nz * lz);
+                    float lum = 0.66f + 0.34f * lambert;
+                    lum *= 1f - 0.22f * Mathf.SmoothStep(0.78f, 1f, d);
+
+                    // Baked specular (no separate gloss child — same rendering risk).
+                    float ex = (dx + 0.38f) / 0.30f, ey = (dy - 0.42f) / 0.22f;
+                    float spec = 0.85f * Mathf.Pow(Mathf.Clamp01(1f - (ex * ex + ey * ey)), 2f);
+
+                    pixels[y * size + x] = new Color(
+                        Mathf.Clamp01(c.r * lum + spec),
+                        Mathf.Clamp01(c.g * lum + spec),
+                        Mathf.Clamp01(c.b * lum + spec), a);
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            _critterOrb = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            _critterOrb.name = "CritterOrb";
+            return _critterOrb;
+        }
+
+        /// <summary>Cheap deterministic 0..1 hash — texture speckle only, never gameplay.</summary>
+        private static float Hash01(int n)
+        {
+            n = (n << 13) ^ n;
+            return ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 2147483647f;
         }
 
         /// <summary>

@@ -62,10 +62,17 @@ namespace CoralCascade
             sr.sharedMaterial = PrimitiveSprites.UnlitMaterial();
             sr.sortingOrder = baseOrder;
 
-            if (color == BubbleColor.Stone && Available)
+            // Stone and Critter are FULLY PROCEDURAL and fully baked into the ROOT sprite
+            // (2026-07-19). They used to depend on imported pack art — `rock_a` on the root,
+            // `fish_pink` on a CHILD renderer — and imported sprites don't draw reliably on
+            // in-level world SpriteRenderers (open 2026-07-16 bug). The critter therefore
+            // rendered as a featureless white ball, which a player hit on Reef 58 and had to
+            // ask about. Same lesson as the ice fix: put the READ where it cannot fail — one
+            // root sprite, no children, no imported assets.
+            if (color == BubbleColor.Stone)
             {
-                // Stones ARE rocks — no bubble shell (and no gloss: matte = unmatchable).
-                sr.sprite = Load("rock_a");
+                // Matte, faceted, unmatchable — no gloss, on purpose.
+                sr.sprite = PrimitiveSprites.StoneOrb();
                 sr.color = Color.white;
                 SetLayerChild(go, "Critter", null, Color.white, 1f, 0);
                 SetLayerChild(go, "Gloss", null, Color.white, 1f, 0);
@@ -75,14 +82,12 @@ namespace CoralCascade
 
             if (color == BubbleColor.Critter)
             {
-                // A trapped critter: fish inside a pale silvery bubble. The shell stays a
-                // NON-playable tint (no color to match — the read is "free me by dropping").
-                // Primitive fallback: the pale pink orb alone still reads as "not a color".
-                sr.sprite = PrimitiveSprites.GlossyOrb();
-                sr.color = new Color(0.94f, 0.97f, 1f);
-                SetLayerChild(go, "Critter", Available ? Load("fish_pink") : null,
-                              Color.white, 0.62f, baseOrder + 1);
-                SetLayerChild(go, "Gloss", PrimitiveSprites.OrbGloss(), Color.white, 1f, baseOrder + 2);
+                // A trapped fish in a pale silvery bubble: no colour to match, so the read
+                // has to be "free me by dropping". Shell, shine and fish are all one sprite.
+                sr.sprite = PrimitiveSprites.CritterOrb();
+                sr.color = Color.white;
+                SetLayerChild(go, "Critter", null, Color.white, 1f, 0);
+                SetLayerChild(go, "Gloss", null, Color.white, 1f, 0);
                 SetLayerChild(go, "Frost", null, Color.white, 1f, 0);
                 return;
             }

@@ -16,12 +16,25 @@ namespace CoralCascade
     {
         private const float ShrinkSeconds = 0.35f; // pop-out at end of life
 
+        // "Already gone" signalling (2026-07-19, user request). Detached debris is scored and
+        // off the board the instant it detaches, but it is still a physics body — at some
+        // angles it wedges in a pocket and sits there looking exactly like a live bubble, so
+        // the player can't tell whether they actually popped it. It now blinks and fades from
+        // early in its fall. FadeHold keeps it solid through the FAST part of the drop (that's
+        // the part carrying the cascade's drama, and the part that can still chain-knock).
+        private const float FadeHold = 0.15f;    // fraction of life at full opacity
+        private const float BlinkStart = 0.30f;  // seconds before the pulse begins
+        private const float BlinkHz = 5f;        // pulses/sec, quickens toward the end
+        private const float BlinkDepth = 0.42f;  // how deep the pulse dips
+
         private CascadeController _cascade;
         private float _killY;
         private float _impactThreshold;
         private float _lifetime;
         private float _age;
         private float _baseScale;
+        private SpriteRenderer[] _renderers;
+        private Color[] _baseColors;
 
         /// <summary>Detach from the controller so a forced teardown doesn't fire settle callbacks.</summary>
         public void Detach() => _cascade = null;
@@ -44,6 +57,11 @@ namespace CoralCascade
             transform.localScale = new Vector3(diameter, diameter, 1f);
 
             BubbleArt.Apply(gameObject, color, false, 12);
+
+            // Cache AFTER Apply — it builds the child layers (gloss) we also have to fade.
+            _renderers = GetComponentsInChildren<SpriteRenderer>(true);
+            _baseColors = new Color[_renderers.Length];
+            for (int i = 0; i < _renderers.Length; i++) _baseColors[i] = _renderers[i].color;
 
             var col = GetComponent<CircleCollider2D>();
             col.radius = 0.5f;
@@ -72,6 +90,36 @@ namespace CoralCascade
             {
                 float s = _baseScale * Mathf.Max(0.05f, remain / ShrinkSeconds);
                 transform.localScale = new Vector3(s, s, 1f);
+            }
+
+            ApplyFade();
+        }
+
+        /// <summary>
+        /// Blink + fade, so wedged debris never masquerades as a live bubble. Purely visual:
+        /// scored, detached and collision behaviour are all untouched.
+        /// </summary>
+        private void ApplyFade()
+        {
+            if (_renderers == null) return;
+
+            float t = Mathf.Clamp01(_age / _lifetime);
+            float fade = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((t - FadeHold) / (1f - FadeHold)));
+
+            float blink = 1f;
+            if (_age > BlinkStart)
+            {
+                // Frequency ramps with age: a slow throb that turns into a flicker.
+                float phase = (_age - BlinkStart) * Mathf.PI * 2f * BlinkHz * (0.6f + t);
+                blink = 1f - BlinkDepth * (0.5f - 0.5f * Mathf.Cos(phase));
+            }
+
+            float alpha = Mathf.Clamp01(fade * blink);
+            for (int i = 0; i < _renderers.Length; i++)
+            {
+                if (_renderers[i] == null) continue;
+                Color c = _baseColors[i];
+                _renderers[i].color = new Color(c.r, c.g, c.b, c.a * alpha);
             }
         }
 

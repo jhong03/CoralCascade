@@ -41,6 +41,8 @@ namespace CoralCascade
         private Vector3 _shakeApplied;
 
         // One-slot praise banner ("BIG COMBO!!") — a new cheer replaces the current one.
+        // MeasureWidth must query metrics at the SAME font size/style the banner renders at.
+        private const int AnnounceFontSize = 72;
         private Transform _announce;
         private TextMesh _announceMain, _announceShadow;
         private float _announceAge, _announceLife;
@@ -163,6 +165,13 @@ namespace CoralCascade
                                              _cam.transform.position.y - _shakeApplied.y + ortho * 0.30f,
                                              0f);
             float ch = ortho * 0.017f * intensity;
+            // FIT TO THE VIEW: character size was derived from ortho (a VERTICAL measure)
+            // only, so a long cheer ran off a narrow portrait screen — "THE REEF FLOODED!"
+            // rendered as "REEF FLOOD" with both ends past the edges. Measure the string and
+            // shrink until it fits the camera width (same lesson as DrawLabelShadowedFit).
+            float maxW = ortho * _cam.aspect * 2f * 0.90f;
+            float unitW = MeasureWidth(text);
+            if (unitW > 0f && unitW * ch > maxW) ch = maxW / unitW;
             _announceMain.characterSize = ch;
             _announceShadow.characterSize = ch;
             _announceShadow.transform.localPosition = new Vector3(ch * 3f, -ch * 3f, 0f);
@@ -172,6 +181,27 @@ namespace CoralCascade
             _announceAge = 0f;
             _announceLife = 1.25f;
             _announceActive = true;
+        }
+
+        /// <summary>
+        /// Width of <paramref name="text"/> in world units at characterSize 1 — TextMesh
+        /// lays glyphs out at advance * characterSize * 0.1. Returns 0 if the font is
+        /// unavailable (caller then keeps its unfitted size).
+        /// </summary>
+        private float MeasureWidth(string text)
+        {
+            Font font = BuiltinFont();
+            if (font == null || string.IsNullOrEmpty(text)) return 0f;
+            // Dynamic fonts only carry metrics for glyphs currently baked into the atlas.
+            font.RequestCharactersInTexture(text, AnnounceFontSize, FontStyle.Bold);
+            float advance = 0f;
+            for (int i = 0; i < text.Length; i++)
+            {
+                CharacterInfo ci;
+                if (font.GetCharacterInfo(text[i], out ci, AnnounceFontSize, FontStyle.Bold))
+                    advance += ci.advance;
+            }
+            return advance * 0.1f;
         }
 
         /// <summary>
@@ -246,7 +276,7 @@ namespace CoralCascade
                     go.transform.SetParent(_announce, false);
                     var tm = go.AddComponent<TextMesh>();
                     tm.font = font;
-                    tm.fontSize = 72;
+                    tm.fontSize = AnnounceFontSize;
                     tm.fontStyle = FontStyle.Bold;
                     tm.anchor = TextAnchor.MiddleCenter;
                     tm.alignment = TextAlignment.Center;

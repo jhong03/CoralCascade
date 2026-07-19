@@ -5,23 +5,38 @@ Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `Coral
 
 ## NEXT SESSION — start here
 
-Everything from the 2026-07-18/19 play-test sessions is **committed & pushed** (3 commits:
-`b9aa9de` fixes, `fcba971` tide retune, `296c06a` mechanic guides). Working tree is clean
-apart from pre-existing Unity churn (see "Uncommitted" below).
+The 2026-07-18/19 work is committed & pushed (`b9aa9de`, `fcba971`, `296c06a`). The
+2026-07-19 LATE-GAME RETUNE + 50→70 LEVELS and the banner-width fix are **UNCOMMITTED**
+in the working tree (`LevelCatalog.cs`, `PopEffects.cs`, this file).
 
-**THE GATE: none of it is play-tested.** All changes are compile-verified, and the reef
-math is generator-verified, but nothing below has been seen running. Worth checking first:
-1. **3-row top bar** — centered "Level N" reads well? Taller bar (106px·scale, camera
-   reservation 114f) doesn't crowd the top bubbles?
-2. **Ice visible?** Frozen bubbles should now be pale icy-blue (root-tint wash).
-3. **Reef 10 winnable?** It was PROVEN dead before the stone-placement fix.
-4. **Tide feel** (Reefs 16–20) — retuned from "impossible" to ~1.27–1.42 needed/shot. If it
-   now feels toothless, `LevelCatalog.TideIntervalBump` (5) is the one number to walk back.
-5. **Tutorial-card friction** — guides now re-show on EVERY level start; on a 3-mechanic
-   reef that's a tall modal before every play, including retries. Walk-backs if it grates:
-   skip on restart-only, or use a compact splash line for repeats + full cards for firsts.
+**THE GATE: none of it is play-tested.** Everything is compile-verified, and the reef math
+is verified by RUNNING the shipping `LevelCatalog` standalone (see "Verification tooling" —
+that technique is new and much stronger than the old replication). Worth checking first:
+1. **Reefs 47–70 winnable now?** They were being handed ~55-80% of their own computed shot
+   budget. If they now feel too GENEROUS, `LevelCatalog.ShotCap` (75) is the one dial.
+2. **Do the four SHAPE MOTIFS read on screen?** Pillars (51–55), Lattice (56–60), Chasm
+   (61–65), Spires (66–70). They were tuned by dumping ASCII boards, never seen rendered.
+   Spires especially — do the towers look deliberate or just like a gappy board?
+3. **70 nodes on the Adventure map** — the path is data-driven off `Levels.Count` and needs
+   no change, but that's unverified visually (scroll length, frontier centring).
+4. **3-row top bar / ice visibility / Reef 10** — still unverified from the last session.
+5. **Tutorial-card friction** — guides re-show on EVERY level start; on a 3-mechanic reef
+   that's a tall modal before every play, retries included. Walk-backs if it grates: skip
+   on restart-only, or a compact splash line for repeats + full cards for firsts.
+6. **Banner text** — "THE REEF FLOODED!" now shrinks to fit; check it still reads big.
+7. **Stone + critter now procedural** — stone should be a matte grainy grey rock, critter a
+   pink fish in a pale bubble. If stones now read as "just another grey ball", add a glyph
+   or notch rather than going back to `rock_a`.
+8. **Debris blink/fade** — if the flicker is distracting during big cascades, `BlinkDepth`
+   (0.42) and `FadeHold` (0.15) in `FallingBubble` are the two dials.
 
 **Deferred / residual (my flags, user-aware):**
+- **Records for Reefs 27–70 are re-based** — every clipped level's shot budget changed, and
+  Reefs 46–50 got new boards entirely (trimmed specs). Old bests/stars for those keys are
+  orphaned or easier to beat. Accepted, same as the earlier restructures.
+- **`BudgetMul` is still partly a no-op at the very top** — 7 late levels want more than the
+  75-shot ceiling and clip to it. Much better than the old 24, but the last waves are
+  differentiated by board content, not by their fairness dial.
 - **Critters can still sit at row 2** — same seal risk stones just had fixed; lower risk
   (droppable, single) but the same class of bug. Applying the rows-3+/interior rule to
   critters was offered and NOT done.
@@ -43,6 +58,91 @@ SpriteRenderer bug (pale untextured quads); camera framing off a hardcoded 9:19.
 `ProjectSettings/PhysicsCoreProjectSettings2D.asset`.
 
 ## Status (as of 2026-07-19)
+
+**2026-07-19 — LATE-GAME RETUNE + ADVENTURE 50 → 70 LEVELS (uncommitted; compile-verified
+and generator-verified by running the REAL LevelCatalog, NOT play-tested).** User-reported:
+"Level 50 not possible to win." It was not a seal bug — it was the shot cap.
+
+- **Diagnosis: the `Math.Min(50, …)` shot cap was silently discarding the budget formula's
+  output.** Reef 50 computed a **95-shot** budget and was handed **50** (53%). Every reef
+  from **27** on was clipped, widening with depth (Reef 37 → 63 wanted / 50 given, which is
+  exactly the level the user lost to a REEF FLOOD). Two knock-ons: (a) the previous session's
+  tide compensation (factor `0.4 → 1.6`) was thrown away for all 24 of those levels — it only
+  ever landed on the 16–25 band that got verified; (b) **`BudgetMul` became a dead dial** —
+  Reef 46 (1.10, breather) and Reef 50 (1.00, finale) both rounded to 50, so the wave rhythm
+  stopped existing. Reef 50 needed 89 bubbles cleared in 50 shots (1.78/shot) at 6 colours
+  with 22% unmatchable obstacles. NOTE: no HARD lock was found — row 0 is always plain
+  colour and every obstacle is droppable, so the 2026-07-18 stone rule is holding.
+- **Fix (user chose "raise cap + trim mass", 75-shot playtime ceiling):**
+  1. `LevelCatalog.ShotCap` **50 → 75** — a PLAYTIME ceiling (~4–5 min), not a difficulty
+     one. Heavy boards were trimmed to fit under it rather than raising it to meet them.
+  2. **Wave 10 (46–50) trimmed** (density 0.74–0.82 → 0.68–0.72, stones/ice 5–9 → 4–8,
+     critters ≤3). It is no longer the finale and had to make room for 51–70.
+  3. `MinShotsAfterDrop = 4` — **new general rule**: after capping, shots are nudged up so
+     the last tide drop always leaves shots to answer it. A drop landing on the final shot
+     is an unavoidable loss; Reefs 16/19 (fixed last session) and **Reef 25 (0 shots, still
+     live until now)** all shipped in that state. Adding < `PressureEveryShots` can never
+     create another drop, so the true max is 78.
+- **20 NEW LEVELS — waves 11–14, identity from board SHAPE not size.** At 13 columns a
+  bubble is already ~28 logical points on a phone, so the grid CANNOT grow; `Motif` gives
+  the new waves distinct geometry with **no new rules, art, or tutorial cards**:
+    11 Reefs 51–55 **Sunken Ruins** — `Pillars`: stones fill whole interior COLUMNS
+       top-down (ruined columns you topple by cutting the plain rows above).
+    12 Reefs 56–60 **Glacier Vault** — `Lattice`: ice on an `(r+c)%3` crystalline grid.
+    13 Reefs 61–65 **Sunless Chasm** — `Chasm`: a hollow rift splits the board; fastest tide.
+    14 Reefs 66–70 **Leviathan's Rest** — `Spires`: paired columns plunge to the floor.
+       Thin tide slack, but one cut at a tower's top drops it whole. Reef 70 = hardest board.
+- **Motif safety (the part that matters):** motifs are **density masks applied DURING
+  generation**, so the up-neighbour rule still gates every placement and anchoring-by-
+  construction is untouched. **Carving cells out AFTER generation would orphan everything
+  below the hole — never do that.** `Motif.None` returns a 1.0 multiplier (exact in IEEE754)
+  and keeps the original placement path, so **Reefs 1–50 are bit-identical**, verified.
+- **`ConvertCells` gained a `where` PREFERENCE (not a filter)**: pattern cells are used
+  first, then any eligible cell, so a sparse board still gets its full authored count
+  instead of silently under-placing (Pillars was placing 4 of 12 stones before this).
+- **Verified** (running the shipping catalog, all 70 reefs + 21 dailies): zero floating
+  bubbles; every guaranteed count placed; every tide level ≥4 shots after its last drop;
+  need-rate across 46–70 now **1.06–1.32** (was 1.78 at Reef 50), mass 41–60, shots 57–76.
+  Two independently-written implementations (C# + PowerShell) agree on every number.
+- Daily band widened to the Reef **16–60** spec range (was 16–45) so dailies see the motifs;
+  deliberately stops short of the finale waves.
+- **Tuning lesson:** two of the four motifs failed their first draft and were caught only by
+  dumping ASCII boards — "Teeth" (per-column depth limits) was INVISIBLE because the
+  generator's own `1 - r*0.055` taper already bites harder than the mask, and Pillars
+  scattered because the columns it filled were too sparse to stack in. Fixes: replaced
+  Teeth with Spires (mask >1.0 to DEFEAT the taper) and gave Pillars a 1.6 mask to thicken
+  its own columns first. **Always dump a generated board before trusting a generator change.**
+
+**2026-07-19 — STONE + CRITTER ART MADE FULLY PROCEDURAL, and DEBRIS NOW BLINKS/FADES
+(uncommitted; compile-verified, textures eyeballed as rendered PNGs, NOT play-tested).**
+User on Reef 58: "what is this white colored ball, I don't have it in my shooter."
+
+- **It was a CRITTER whose fish had vanished.** `BubbleArt` drew critters as a pale shell
+  (`0.94,0.97,1`) with an imported `fish_pink` sprite on a CHILD renderer, and stone as
+  imported `rock_a` on the root. Imported pack sprites don't draw reliably on in-level world
+  SpriteRenderers (the still-open 2026-07-16 bug), so the critter read as a featureless white
+  ball and stones were most likely pale silhouettes. **Third time this bug has cost
+  something** (backdrop decor → ice → this).
+- **Fix (user picked "procedural read for both"): put the read where it CANNOT fail.** New
+  `PrimitiveSprites.StoneOrb()` (matte, 3-band faceted, hash-speckled grey — deliberately NO
+  specular, because matte is what reads "unmatchable" next to the glossy playables) and
+  `CritterOrb()` (coral fish + eye + shell shading + baked specular, all in ONE sprite).
+  Both go on the ROOT renderer with `Color.white`, no children, no imported assets — the
+  same lesson as the ice fix. `BubbleArt` no longer branches on `Available` for these two,
+  so the with-pack and without-pack looks are finally identical.
+- **VERIFY-THE-PIXELS TECHNIQUE (new, worth reusing):** the textures were replicated in
+  System.Drawing (`RenderOrbs.cs`, scratchpad) and saved as PNGs — including a contact sheet
+  on the in-game water blue at real gameplay size (~28px) — so they could be LOOKED at
+  before shipping. Caught a blocky rectangular fish eye. Same principle as dumping ASCII
+  boards: never ship generated content you have not viewed. NOTE when replicating: Unity's
+  `Mathf.SmoothStep(from, to, t)` maps into [from,to] — it is NOT the classic 0..1 edge
+  function, and the existing orb code relies on that (its "rim shadow" dims the whole ball).
+- **DETACHED DEBRIS BLINKS AND FADES** (user request): debris is scored and off the board the
+  moment it detaches, but it is still a physics body and at some angles it wedges in a pocket
+  looking exactly like a live bubble. `FallingBubble` now fades (hold 15% of life, then
+  smoothstep to 0) with a blink that quickens as it dies. Full opacity is held through the
+  FAST part of the fall on purpose — that's the cascade's drama, and the window in which it
+  can still chain-knock. Lifetime stays 2.5s; scoring/collision/quiescence untouched.
 
 **2026-07-19 — TIDE RETUNE (committed; compile- + generator-verified, NOT play-tested).**
 User-reported: "impossible to win level 18, too few moves before tide rises." Verified with
@@ -419,6 +519,14 @@ hold → fade-up, scaled time. Intensity pass (user: "more obvious"): shake mult
 decay 1.1, ImpactWave 0.25, Celebration 0.5; slow-mo deepened to scale 0.22 / hold 0.45 /
 ramp 0.18; GameFlow draws a cyan bullet-time tint while timeScale < 0.85 (never while
 paused).
+BANNER-WIDTH LESSON (2026-07-19, user screenshot: "THE REEF FLOODED!" rendered as
+"REEF FLOOD", both ends off-screen): `Announce` sized characterSize from `orthographicSize`
+alone — a VERTICAL measure — so long cheers overran a narrow portrait view. Now it measures
+the string (`PopEffects.MeasureWidth`: sum of `CharacterInfo.advance` after
+`RequestCharactersInTexture`, × 0.1 = TextMesh's world scale at characterSize 1) and shrinks
+ch to fit 90% of `ortho * cam.aspect * 2`. Same disease as the HUD/splash text lessons: any
+world-space TextMesh must be measured against the camera's WIDTH, not just its height.
+Metrics must be queried at the render font size/style — hence the `AnnounceFontSize` const.
 
 **Sunlit UI pass (2026-07-14, user-approved A+B+C+D):** palette = "tropical lagoon at
 noon", not "deep sea at night". `ReefBackdrop.cs` (rebuilt by `ConfigureWorld`, seeded
@@ -644,6 +752,23 @@ board floats small on 4:3 tablets) + no Screen.safeArea insets (top bar under no
   `Library/ScriptAssemblies/Unity.InputSystem.dll`. Use Windows-style `C:/` paths in the rsp.
 - **Board anchoring check:** PowerShell `Add-Type` script replicating `HexGrid`'s odd-r deltas —
   every test board must have zero floating bubbles at load. Run it whenever boards change.
+- **RUN THE REAL GENERATOR (best method, added 2026-07-19 — prefer this over replicating).**
+  `LevelCatalog` only needs `BoardLayout.cs` + `BubbleColor.cs` + `TestBoards.cs`, and none
+  of them touch a Unity API at runtime, so they compile into a plain console exe and RUN:
+  csc with `-target:exe` + refs `netstandard.dll`, `UnityEngine.CoreModule.dll`,
+  `UnityEngine.dll`; then copy those two Unity DLLs next to the exe, write a
+  `verify.runtimeconfig.json` (`tfm net8.0`, framework `Microsoft.NETCore.App` 8.0.0) and
+  run it with `NetCoreRuntime/dotnet.exe`. Dumps real boards/shots/star inputs with no
+  editor and no transcription risk. Scratchpad: `Verify.cs`. Keeping a hand-written
+  replication ALONGSIDE it is still worth it as a cross-check (both agreed cell-for-cell
+  on all 70 boards after the port).
+- **RNG-STREAM LESSON (cost a false alarm 2026-07-19):** changing ONE spec number moves
+  cells that number has nothing to do with. Dropping Reef 55's stones 11 → 10 stopped the
+  Pillars fallback from firing, which consumed different rng draws, which relocated the
+  board's ICE. So a board dump is only comparable against a dump from the SAME spec
+  revision — re-dump both sides after any table edit before concluding "they diverged".
+- NOTE: `csc.dll` now lives at `<UnityData>/DotNetSdk/sdk/8.0.318/Roslyn/bincore/csc.dll`
+  (the old `DotNetSdkRoslyn/` path in the compile-check line above is stale for 6000.5.3f1).
 
 ## Out of scope until data justifies (game plan §7)
 
