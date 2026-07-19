@@ -1606,33 +1606,82 @@ namespace CoralCascade
 
             float x = area.x + 20f * _scale + px;
             float y = laneY + bob;
-            if (s2 == null)
-            {
-                DrawSpriteGUI(new Rect(x, y, w, hgt), s1, !movingRight, item.Tint);
-                return; // pack fish face right natively
-            }
 
+            // One body draw, reusable — the shimmer pass re-runs it in another colour.
             float w1 = s1.rect.width * px2unit, h1 = s1.rect.height * px2unit;
-            float w2 = s2.rect.width * px2unit, h2 = s2.rect.height * px2unit;
+            float w2 = s2 != null ? s2.rect.width * px2unit : 0f;
+            float h2 = s2 != null ? s2.rect.height * px2unit : 0f;
             // Vertical alignment must follow TEXTURE space, not centering: the halves'
             // artwork heights differ but they share a top edge in their source tiles —
             // centering stepped the seam by ~2px (visible split, user-reported).
-            float texTopMax = Mathf.Max(s1.rect.yMax, s2.rect.yMax);
+            float texTopMax = s2 != null ? Mathf.Max(s1.rect.yMax, s2.rect.yMax) : s1.rect.yMax;
             float y1 = y + (texTopMax - s1.rect.yMax) * px2unit;
-            float y2 = y + (texTopMax - s2.rect.yMax) * px2unit;
+            float y2 = s2 != null ? y + (texTopMax - s2.rect.yMax) * px2unit : y;
             // Overlap the joint by ~1.5 source px of solid body so filtering/sub-pixel
             // placement can never open a gap between the quads.
             float overlap = 1.5f * px2unit;
-            if (movingRight)
+
+            void DrawBody(Color tint)
             {
-                DrawSpriteGUI(new Rect(x, y1, w1, h1), s1, false, item.Tint);
-                DrawSpriteGUI(new Rect(x + w1 - overlap, y2, w2, h2), s2, false, item.Tint);
+                if (s2 == null)
+                {
+                    DrawSpriteGUI(new Rect(x, y, w, hgt), s1, !movingRight, tint);
+                    return; // pack fish face right natively
+                }
+                if (movingRight)
+                {
+                    DrawSpriteGUI(new Rect(x, y1, w1, h1), s1, false, tint);
+                    DrawSpriteGUI(new Rect(x + w1 - overlap, y2, w2, h2), s2, false, tint);
+                }
+                else
+                {
+                    // Mirrored: halves swap order AND each half flips.
+                    DrawSpriteGUI(new Rect(x, y2, w2, h2), s2, true, tint);
+                    DrawSpriteGUI(new Rect(x + w2 - overlap, y1, w1, h1), s1, true, tint);
+                }
             }
-            else
+
+            DrawBody(item.Tint);
+            if (item.Shimmer > 0f) DrawShimmer(item, DrawBody, t, hp);
+            if (item.Sparkle) DrawGlints(new Rect(x, y, w, hgt), t, hp);
+        }
+
+        /// <summary>
+        /// Pearlescent overlay: the body redrawn in a slowly cycling pale colour, alpha
+        /// blended so it LIGHTENS (a multiply tint never can — see ReefItem.Shimmer). The
+        /// hue drifts through pink/cyan/gold, which is what sells "nacre" rather than
+        /// "someone turned the brightness up".
+        /// </summary>
+        private void DrawShimmer(ReefItem item, System.Action<Color> drawBody, float t, int hp)
+        {
+            // Keep the hue swing SMALL: nacre is white with a hint of colour in it. A wide
+            // swing (±0.18) rendered as a candy-pink eel, not a pearl one.
+            float phase = t * 0.55f + (hp % 97) * 0.06f;
+            var sheen = new Color(
+                0.92f + 0.08f * Mathf.Sin(phase),
+                0.92f + 0.08f * Mathf.Sin(phase + 2.094f),
+                0.92f + 0.08f * Mathf.Sin(phase + 4.189f),
+                item.Shimmer * (0.58f + 0.12f * Mathf.Sin(t * 1.3f)));
+            drawBody(sheen);
+        }
+
+        /// <summary>Twinkling star glints along a rare's body — procedural, so always drawn.</summary>
+        private void DrawGlints(Rect body, float t, int hp)
+        {
+            var star = PrimitiveSprites.Star();
+            if (star == null) return;
+            for (int i = 0; i < 3; i++)
             {
-                // Mirrored: halves swap order AND each half flips.
-                DrawSpriteGUI(new Rect(x, y2, w2, h2), s2, true, item.Tint);
-                DrawSpriteGUI(new Rect(x + w2 - overlap, y1, w1, h1), s1, true, item.Tint);
+                float phase = t * 2.1f + i * 2.4f + (hp % 53) * 0.11f;
+                float pulse = Mathf.Max(0f, Mathf.Sin(phase));       // dark most of the cycle
+                if (pulse <= 0.02f) continue;
+                float size = (5f + 4f * pulse) * _scale;
+                // Stay in the middle band: `body` is the whole sprite CANVAS and the artwork
+                // only fills part of it, so a wider spread puts glints in open water.
+                float gx = body.x + body.width * (0.22f + 0.28f * i);
+                float gy = body.y + body.height * (0.42f + 0.09f * ((i + hp) % 3));
+                DrawSpriteGUI(new Rect(gx - size * 0.5f, gy - size * 0.5f, size, size), star,
+                              false, new Color(1f, 1f, 1f, pulse * 0.9f));
             }
         }
 

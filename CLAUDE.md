@@ -5,10 +5,10 @@ Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `Coral
 
 ## NEXT SESSION — start here
 
-Everything is **committed & pushed** through `2f2dc23` (late-game retune + 50→70 levels +
-procedural stone/critter + debris fade + banner-width fix). Working tree is clean apart
-from the pre-existing Unity churn listed under "Uncommitted" below, which was left alone
-again — it is still NOT mine to decide on.
+Everything is **committed & pushed** (late-game retune + 50→70 levels + procedural
+stone/critter + debris fade + banner-width fix + Pearl Eel shimmer). Working tree is clean
+apart from the pre-existing Unity churn listed under "Uncommitted" below, which was left
+alone again — it is still NOT mine to decide on.
 
 **THE GATE: none of it is play-tested.** Everything is compile-verified, and the reef math
 is verified by RUNNING the shipping `LevelCatalog` standalone (see "Verification tooling" —
@@ -113,6 +113,25 @@ and generator-verified by running the REAL LevelCatalog, NOT play-tested).** Use
   scattered because the columns it filled were too sparse to stack in. Fixes: replaced
   Teeth with Spires (mask >1.0 to DEFEAT the taper) and gave Pillars a 1.6 mask to thicken
   its own columns first. **Always dump a generated board before trusting a generator change.**
+
+**2026-07-19 — PEARL EEL MADE VISUALLY DISTINCT (uncommitted; compile-verified, previewed
+as a rendered PNG, NOT play-tested).** User: "Pearl Eel doesn't look any different from the
+normal moray eel." It genuinely wasn't: it shares the Moray's sprite pair and its only
+distinction was `Tint = (0.95,0.97,1)` — and **sprite/GUI tinting MULTIPLIES, so tinting an
+already-grey fish toward white is a ~5% no-op. Multiply can never lighten.** (Same law the
+orb gloss already obeys by being its own untinted layer; the Golden Puffer works only
+because brown × gold is a genuine darkening.)
+- Fix: two new `ReefItem` fields, both general. **`Shimmer`** (0..1) redraws the body in a
+  second ALPHA-BLENDED pass — that's what lightens — in a slowly cycling pale colour;
+  **`Sparkle`** adds twinkling procedural `Star()` glints. Pearl Eel also grew 1.3 → 1.55,
+  so it is visibly LONGER than the Moray (1.2) even before the colour registers.
+- Tuning notes: the hue swing must stay SMALL (±0.08 around 0.92) — the first attempt at
+  ±0.18 rendered a candy-pink eel, not a pearl one. Glints are confined to the middle
+  0.42–0.60 of the sprite CANVAS because the artwork only fills part of it; a wider spread
+  put glints in open water. Both caught by rendering a comparison PNG (`RenderEel.cs`,
+  scratchpad — composes the real pack halves and applies the actual blend maths).
+- Golden Puffer deliberately left alone (gold already reads); one line adds `Sparkle` to it
+  if the rares should feel like a matched set.
 
 **2026-07-19 — STONE + CRITTER ART MADE FULLY PROCEDURAL, and DEBRIS NOW BLINKS/FADES
 (uncommitted; compile-verified, textures eyeballed as rendered PNGs, NOT play-tested).**
@@ -707,7 +726,7 @@ timers, NO fish death/decay, NO social/gifting. **Purely cosmetic forever** (use
   seaweed_green_a/pink_a 15, seaweed_orange_a 20, extra bubble-stream column 25.
 - **Achievement rares** (NOT buyable, derived from stars at load — no extra state):
   Golden Puffer = 3★ all Tutorial Reef (fish_brown tinted gold); Pearl Eel = 3★ any 10
-  Adventure levels (fish_grey_long_b tinted pearl-white).
+  Adventure levels (the Moray's own sprite pair + `Shimmer`/`Sparkle`, see below).
 - **Persistence**: `CoralCascade.Reef.<ItemId>` = owned count; per-fish buy timestamps
   (CSV under `CoralCascade.Reef.T.<ItemId>`) drive **growth**: scale lerps 0.55 → 1.0
   over 3 real days (UtcNow) — bought as a baby, grows across sessions, never shrinks.

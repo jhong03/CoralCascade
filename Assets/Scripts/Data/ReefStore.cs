@@ -25,6 +25,18 @@ namespace CoralCascade
         public Color Tint = Color.white;
         public float SizeMul = 1f;
 
+        /// <summary>
+        /// Strength (0..1) of the pearlescent overlay pass in the tank. A TINT CANNOT DO
+        /// THIS: GUI/sprite tinting multiplies, so tinting an already-grey sprite toward
+        /// white is a no-op — which is exactly why the Pearl Eel was indistinguishable from
+        /// the Moray Eel (user-reported 2026-07-19). Lightening needs a second, alpha-blended
+        /// pass over the top. Same lesson as the orb gloss being its own untinted layer.
+        /// </summary>
+        public float Shimmer;
+
+        /// <summary>Twinkling glints along the body — the "this is a trophy" read.</summary>
+        public bool Sparkle;
+
         public ReefItem(string id, string name, string sprite, int price,
                         ReefItemKind kind, float sizeMul = 1f)
         {
@@ -74,9 +86,12 @@ namespace CoralCascade
         public static readonly ReefItem GoldenPuffer =
             new ReefItem("rare_gold_puffer", "Golden Puffer", "fish_brown", 0, ReefItemKind.Fish, 1.25f)
             { Tint = new Color(1f, 0.84f, 0.35f) };
+        // The Pearl Eel shares the Moray Eel's sprite pair, so it needs more than a tint to
+        // read as a different creature: it is noticeably LONGER (1.55 vs the Moray's 1.2),
+        // washed pearl-white by the Shimmer pass, iridescent, and it glints.
         public static readonly ReefItem PearlEel =
-            new ReefItem("rare_pearl_eel", "Pearl Eel", "fish_grey_long_a", 0, ReefItemKind.Fish, 1.3f)
-            { SpriteName2 = "fish_grey_long_b", Tint = new Color(0.95f, 0.97f, 1f) };
+            new ReefItem("rare_pearl_eel", "Pearl Eel", "fish_grey_long_a", 0, ReefItemKind.Fish, 1.55f)
+            { SpriteName2 = "fish_grey_long_b", Shimmer = 1f, Sparkle = true };
 
         /// <summary>Golden Puffer: 3★ on EVERY Tutorial Reef board.</summary>
         public static bool GoldenPufferUnlocked()
