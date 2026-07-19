@@ -149,6 +149,13 @@ namespace CoralCascade.EditorTools
                 problems.Add($"target SDK is below {TargetSdk}");
             if (!EditorUserBuildSettings.buildAppBundle)
                 problems.Add("Build App Bundle is off — Play requires an AAB for new apps");
+
+            // Module installed but the editor still pointed at another platform: everything
+            // above can be perfectly configured and Build still produces a Windows .exe.
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
+                problems.Add($"active build target is {EditorUserBuildSettings.activeBuildTarget}, " +
+                             "not Android — File ▸ Build Profiles ▸ Android ▸ Switch Platform " +
+                             "(the first switch reimports every asset, so expect a wait)");
             bool anyIcon = false;
             foreach (var kind in PlayerSettings.GetSupportedIconKinds(NamedBuildTarget.Android))
                 foreach (var icon in PlayerSettings.GetPlatformIcons(NamedBuildTarget.Android, kind))
