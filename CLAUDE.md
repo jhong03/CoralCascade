@@ -5,9 +5,10 @@ Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `Coral
 
 ## NEXT SESSION — start here
 
-The 2026-07-18/19 work is committed & pushed (`b9aa9de`, `fcba971`, `296c06a`). The
-2026-07-19 LATE-GAME RETUNE + 50→70 LEVELS and the banner-width fix are **UNCOMMITTED**
-in the working tree (`LevelCatalog.cs`, `PopEffects.cs`, this file).
+Everything is **committed & pushed** through `2f2dc23` (late-game retune + 50→70 levels +
+procedural stone/critter + debris fade + banner-width fix). Working tree is clean apart
+from the pre-existing Unity churn listed under "Uncommitted" below, which was left alone
+again — it is still NOT mine to decide on.
 
 **THE GATE: none of it is play-tested.** Everything is compile-verified, and the reef math
 is verified by RUNNING the shipping `LevelCatalog` standalone (see "Verification tooling" —
