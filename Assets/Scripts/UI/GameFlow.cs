@@ -23,7 +23,7 @@ namespace CoralCascade
         /// nothing ever navigates back to it); Home = big section cards + daily banner;
         /// SectionMap = one section's winding route with a Back button; Reef = aquarium.
         /// </summary>
-        private enum MenuPage { Intro, Home, SectionMap, Reef, Settings }
+        private enum MenuPage { Intro, Home, SectionMap, Reef, Settings, Privacy }
 
         /// <summary>
         /// One tab of the level map with its own level list and its own progression chain.
@@ -224,6 +224,8 @@ namespace CoralCascade
                 _overlayScroll = Vector2.zero;
                 _finalScore = _manager.Score.Total;
                 bool won = _manager.State.State == GameState.Won;
+                Sfx.Play(won ? Sfx.Clip.Win : Sfx.Clip.Lose, 1f);
+                Haptics.Bump();
                 _endShotsLeft = won ? _manager.State.ShotsRemaining : 0;
                 int prevStars = 0; // best stars BEFORE this run — drives the replay star-gain payout
                 if (won)
@@ -853,9 +855,31 @@ namespace CoralCascade
             GUI.color = oldColor;
         }
 
+        /// <summary>
+        /// Minimum height for anything tappable. Android's accessibility guidance is 48dp;
+        /// at _scale = Screen.height/800 on a typical 1080×2340 phone, 44·scale lands at
+        /// ~52dp while the old 30·scale chrome buttons were only ~35dp. Any row that raises
+        /// a button to this MUST also move whatever sits below it (see DrawHomePage).
+        /// </summary>
+        private float MinTouch => 44f * _scale;
+
+        /// <summary>
+        /// Top inset for every menu page's chrome (display cutout). Backgrounds stay
+        /// full-bleed; only content moves, so the art still runs under the notch.
+        /// </summary>
+        private static float PageTop { get { SafeAreaUtil.Refresh(); return SafeAreaUtil.Top; } }
+
+        /// <summary>Bottom inset (gesture bar / home indicator) — keep controls above it.</summary>
+        private static float PageBottom { get { SafeAreaUtil.Refresh(); return SafeAreaUtil.Bottom; } }
+
         private Rect CenteredColumn(float width, float height)
         {
-            return new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+            // Centre within the SAFE area, not the raw screen: on a device with a notch and
+            // a gesture bar the two insets are unequal, and centring on the raw screen
+            // pushes panels toward whichever edge has the bigger inset.
+            var safe = SafeAreaUtil.Content;
+            return new Rect(safe.x + (safe.width - width) * 0.5f,
+                            safe.y + (safe.height - height) * 0.5f, width, height);
         }
 
         /// <summary>
@@ -921,7 +945,7 @@ namespace CoralCascade
                     new Vector2(Screen.width * 0.5f, Screen.height * 0.5f));
             }
             float h = contentHeight + _panelStyle.padding.top + _panelStyle.padding.bottom + 10f * _scale;
-            h = Mathf.Min(h, Screen.height - 30f);
+            h = Mathf.Min(h, Screen.height - PageTop - PageBottom - 30f);
             GUILayout.BeginArea(CenteredColumn(width, h), _panelStyle);
             _overlayScroll = GUILayout.BeginScrollView(_overlayScroll);
         }
@@ -987,6 +1011,7 @@ namespace CoralCascade
             else if (_menuPage == MenuPage.Home) DrawHomePage();
             else if (_menuPage == MenuPage.Reef) DrawReefPage();
             else if (_menuPage == MenuPage.Settings) DrawSettingsPage();
+            else if (_menuPage == MenuPage.Privacy) DrawPrivacyPage();
             else DrawSectionMapPage();
             GUI.matrix = pageMatrix;
             GUI.color = pageColor;
@@ -1000,12 +1025,13 @@ namespace CoralCascade
             if (DrawBackButton())
                 return;
             DrawPearlChip();
-            DrawLabelShadowedFit(new Rect(12f * _scale, 56f * _scale,
+            DrawLabelShadowedFit(new Rect(12f * _scale, PageTop + 56f * _scale,
                                           Screen.width - 24f * _scale, 40f * _scale),
                                  Active.Title, _titleStyle);
 
-            float mapTop = 102f * _scale;
-            var mapRect = new Rect(0, mapTop, Screen.width, Screen.height - mapTop);
+            float mapTop = PageTop + 102f * _scale;
+            var mapRect = new Rect(0, mapTop, Screen.width,
+                                   Screen.height - mapTop - PageBottom);
             float spacing = 112f * _scale;
             float nodeSize = 68f * _scale;
             float basePad = 70f * _scale;
@@ -1210,22 +1236,24 @@ namespace CoralCascade
             // Two-row header: the pearl chip owns the top strip, the title sits BELOW it
             // (side by side they collided on phone widths). The title bobs gently.
             DrawPearlChip();
-            if (GUI.Button(new Rect(12f * _scale, 12f * _scale,
-                                    ButtonW("Settings", _tabStyle), 30f * _scale),
-                           "Settings", _tabStyle))
+            if (GUI.Button(new Rect(12f * _scale, PageTop + 12f * _scale,
+                                    ButtonW("Settings", _tabStyle), MinTouch), "Settings", _tabStyle))
             {
                 _menuPage = MenuPage.Settings;
                 _resetArmedUntil = 0f;
                 _settingsNote = null;
             }
+            // Rows below the utility strip start under MinTouch, not under the old 30·scale
+            // button — raising the tap target without moving these would overlap the title.
+            float headerY = PageTop + 12f * _scale + MinTouch + 6f * _scale;
             float bob = Mathf.Sin(Time.unscaledTime * 1.1f) * 2.5f * _scale;
-            DrawLabelShadowedFit(new Rect(12f * _scale, 50f * _scale + bob,
+            DrawLabelShadowedFit(new Rect(12f * _scale, headerY + bob,
                                           Screen.width - 24f * _scale, 44f * _scale),
                                  "CORAL CASCADE", _titleStyle);
-            GUI.Label(new Rect(0, 96f * _scale + bob, Screen.width, 24f * _scale),
+            GUI.Label(new Rect(0, headerY + 46f * _scale + bob, Screen.width, 24f * _scale),
                       "Choose your waters", _subtitleStyle);
 
-            float y = 134f * _scale;
+            float y = headerY + 84f * _scale;
             y += DrawDailyBanner(y) + 6f * _scale;
 
             // The section whose frontier the player should chase glows sunshine.
@@ -1257,11 +1285,11 @@ namespace CoralCascade
             if (DrawBackButton())
                 return;
             DrawPearlChip();
-            DrawLabelShadowedFit(new Rect(12f * _scale, 56f * _scale,
+            DrawLabelShadowedFit(new Rect(12f * _scale, PageTop + 56f * _scale,
                                           Screen.width - 24f * _scale, 40f * _scale),
                                  "My Reef", _titleStyle);
-            float top = 102f * _scale;
-            DrawReefTank(new Rect(0, top, Screen.width, Screen.height - top));
+            float top = PageTop + 102f * _scale;
+            DrawReefTank(new Rect(0, top, Screen.width, Screen.height - top - PageBottom));
         }
 
         /// <summary>
@@ -1274,39 +1302,52 @@ namespace CoralCascade
         {
             if (DrawBackButton())
                 return;
-            DrawLabelShadowedFit(new Rect(12f * _scale, 56f * _scale,
+            DrawLabelShadowedFit(new Rect(12f * _scale, PageTop + 56f * _scale,
                                           Screen.width - 24f * _scale, 40f * _scale),
                                  "Settings", _titleStyle);
 
             float w = Mathf.Min(430f * _scale, Screen.width - 24f * _scale);
             float x = (Screen.width - w) * 0.5f;
-            float y = 116f * _scale;
+            float y = PageTop + 116f * _scale;
 
-            // ---- Screen shake toggle ----
-            var rowRect = new Rect(x, y, w, 56f * _scale);
-            GUI.DrawTexture(rowRect, PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.45f)));
-            GUI.Label(new Rect(rowRect.x + 18f * _scale, rowRect.y, rowRect.width * 0.55f,
-                               rowRect.height), "Screen shake", _tutTitleStyle);
-            bool shakeOn = GameSettings.ShakeEnabled;
-            float togW = Mathf.Max(ButtonW("ON", _tabActiveStyle), ButtonW("OFF", _tabStyle));
-            if (GUI.Button(new Rect(rowRect.xMax - togW - 10f * _scale, rowRect.y + 8f * _scale,
-                                    togW, 40f * _scale),
-                           shakeOn ? "ON" : "OFF", shakeOn ? _tabActiveStyle : _tabStyle))
-                GameSettings.ShakeEnabled = !shakeOn;
-            y += 68f * _scale;
+            // ---- Toggles. Audio ones are only meaningful now that Sfx exists — the page's
+            // standing rule is that a switch must do something (no dead controls). ----
+            if (ToggleRow(ref y, x, w, "Music", GameSettings.MusicEnabled))
+            {
+                GameSettings.MusicEnabled = !GameSettings.MusicEnabled;
+                Sfx.SetMusic(GameSettings.MusicEnabled);
+                Sfx.Play(Sfx.Clip.Tap, 0.6f);
+            }
+            if (ToggleRow(ref y, x, w, "Sound effects", GameSettings.SfxEnabled))
+            {
+                GameSettings.SfxEnabled = !GameSettings.SfxEnabled;
+                Sfx.Play(Sfx.Clip.Tap, 0.6f); // audible only when turning ON — that IS the preview
+            }
+            if (ToggleRow(ref y, x, w, "Vibration", GameSettings.HapticsEnabled))
+            {
+                GameSettings.HapticsEnabled = !GameSettings.HapticsEnabled;
+                Haptics.Bump();
+            }
+            if (ToggleRow(ref y, x, w, "Screen shake", GameSettings.ShakeEnabled))
+                GameSettings.ShakeEnabled = !GameSettings.ShakeEnabled;
 
             // ---- Replay the mechanic guides ----
-            if (GUI.Button(new Rect(x, y, w, 50f * _scale), "Replay mechanic guides", _tabStyle))
+            if (GUI.Button(new Rect(x, y, w, MinTouch), "Replay mechanic guides", _tabStyle))
             {
                 TutorialFlags.ResetAll();
                 _settingsNote = "The Stone / Ice / Tide guides will show again.";
                 _settingsNoteUntil = Time.unscaledTime + 3f;
             }
-            y += 62f * _scale;
+            y += MinTouch + 12f * _scale;
+
+            // ---- Privacy policy (Play requires a policy link OR TEXT inside the app) ----
+            if (GUI.Button(new Rect(x, y, w, MinTouch), "Privacy policy", _tabStyle))
+                _menuPage = MenuPage.Privacy;
+            y += MinTouch + 12f * _scale;
 
             // ---- Reset progress (armed two-tap confirm; disarms after 3s) ----
             bool armed = Time.unscaledTime < _resetArmedUntil;
-            if (GUI.Button(new Rect(x, y, w, 50f * _scale),
+            if (GUI.Button(new Rect(x, y, w, MinTouch),
                            armed ? "Tap again to ERASE everything" : "Reset ALL progress",
                            _buttonStyle))
             {
@@ -1324,7 +1365,7 @@ namespace CoralCascade
                     _settingsNoteUntil = Time.unscaledTime + 3f;
                 }
             }
-            y += 62f * _scale;
+            y += MinTouch + 12f * _scale;
 
             if (_settingsNote != null && Time.unscaledTime < _settingsNoteUntil)
                 GUI.Label(new Rect(x, y, w, 40f * _scale), _settingsNote, _subtitleStyle);
@@ -1332,17 +1373,95 @@ namespace CoralCascade
             // ---- Credits (Kenney is CC0; credit is a courtesy, not an obligation) ----
             string credits = "Art: Kenney Fish Pack & UI Pack — kenney.nl (CC0)";
             float creditsH = _subtitleStyle.CalcHeight(new GUIContent(credits), w);
-            GUI.Label(new Rect(x, Screen.height - creditsH - 40f * _scale, w, creditsH),
+            float footY = Screen.height - PageBottom;
+            GUI.Label(new Rect(x, footY - creditsH - 40f * _scale, w, creditsH),
                       credits, _subtitleStyle);
-            GUI.Label(new Rect(x, Screen.height - 32f * _scale, w, 24f * _scale),
-                      "Coral Cascade — prototype", _subtitleStyle);
+            GUI.Label(new Rect(x, footY - 32f * _scale, w, 24f * _scale),
+                      $"Coral Cascade  v{Application.version}", _subtitleStyle);
         }
+
+        /// <summary>
+        /// One labelled ON/OFF row on a translucent card, advancing <paramref name="y"/>.
+        /// Returns true on the frame it was tapped (caller flips its own setting, so this
+        /// stays agnostic about where the value lives).
+        /// </summary>
+        private bool ToggleRow(ref float y, float x, float w, string label, bool value)
+        {
+            var row = new Rect(x, y, w, MinTouch + 10f * _scale);
+            GUI.DrawTexture(row, PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.45f)));
+            GUI.Label(new Rect(row.x + 18f * _scale, row.y, row.width * 0.55f, row.height),
+                      label, _tutTitleStyle);
+            float togW = Mathf.Max(ButtonW("ON", _tabActiveStyle), ButtonW("OFF", _tabStyle));
+            bool hit = GUI.Button(new Rect(row.xMax - togW - 10f * _scale,
+                                           row.y + (row.height - MinTouch) * 0.5f, togW, MinTouch),
+                                  value ? "ON" : "OFF", value ? _tabActiveStyle : _tabStyle);
+            y += row.height + 12f * _scale;
+            return hit;
+        }
+
+        /// <summary>
+        /// The in-app privacy policy. Google Play requires a policy link in the Console AND
+        /// "a privacy policy link or text within the app itself" — TEXT satisfies the in-app
+        /// half, which is why this is a page rather than a URL button. The Console field
+        /// still needs a hosted, non-PDF, non-geofenced URL with the same content.
+        ///
+        /// KEEP THIS ACCURATE. It describes the app as it is TODAY: no network calls, no
+        /// analytics, no ads, no accounts. The moment ads/analytics/IAP land, this text and
+        /// the Data safety form must be rewritten together — an out-of-date policy is a
+        /// policy violation, not just stale copy.
+        /// </summary>
+        private void DrawPrivacyPage()
+        {
+            if (DrawBackButton()) { _menuPage = MenuPage.Settings; return; }
+            DrawLabelShadowedFit(new Rect(12f * _scale, PageTop + 56f * _scale,
+                                          Screen.width - 24f * _scale, 40f * _scale),
+                                 "Privacy", _titleStyle);
+
+            float w = Mathf.Min(430f * _scale, Screen.width - 24f * _scale);
+            float x = (Screen.width - w) * 0.5f;
+            float top = PageTop + 106f * _scale;
+            float bottom = Screen.height - PageBottom - 16f * _scale;
+
+            var view = new Rect(x, top, w, Mathf.Max(80f * _scale, bottom - top));
+            float contentH = _subtitleStyle.CalcHeight(new GUIContent(PrivacyText), w - 24f * _scale);
+            _privacyScroll = GUI.BeginScrollView(view, _privacyScroll,
+                                                 new Rect(0, 0, w - 20f * _scale, contentH));
+            GUI.Label(new Rect(0, 0, w - 24f * _scale, contentH), PrivacyText, _subtitleStyle);
+            GUI.EndScrollView();
+        }
+
+        private Vector2 _privacyScroll;
+
+        private const string PrivacyText =
+            "Coral Cascade does not collect, store, or share any personal data.\n\n" +
+            "WHAT STAYS ON YOUR DEVICE\n" +
+            "Your level progress, best scores, stars, pearls and reef decorations are saved " +
+            "only on this device, using the operating system's standard app storage. Nothing " +
+            "is uploaded anywhere. We cannot see it.\n\n" +
+            "NO ACCOUNTS\n" +
+            "The game has no sign-in, so it never asks for your name, email address or any " +
+            "other identifying information.\n\n" +
+            "NO NETWORK, NO ADVERTISING, NO ANALYTICS\n" +
+            "This version of the game does not connect to the internet, does not show " +
+            "adverts, and does not use analytics or tracking of any kind. No advertising " +
+            "identifier is read or transmitted.\n\n" +
+            "CHILDREN\n" +
+            "Because the game collects no data at all, it collects none from children either.\n\n" +
+            "DELETING YOUR DATA\n" +
+            "Settings > Reset ALL progress erases everything the game has saved. Uninstalling " +
+            "the app removes it as well.\n\n" +
+            "CHANGES\n" +
+            "If a future version adds adverts or analytics, this policy and the store's Data " +
+            "safety information will be updated before that version is released.\n\n" +
+            "CONTACT\n" +
+            "Questions about privacy can be sent to the developer contact address shown on " +
+            "this app's Google Play store listing.";
 
         /// <summary>Top-left Back button shared by the sub-pages. True if it navigated.</summary>
         private bool DrawBackButton()
         {
-            if (GUI.Button(new Rect(10f * _scale, 12f * _scale,
-                                    ButtonW("< Back", _tabStyle, 92f * _scale), 40f * _scale),
+            if (GUI.Button(new Rect(SafeAreaUtil.Left + 10f * _scale, PageTop + 12f * _scale,
+                                    ButtonW("< Back", _tabStyle, 92f * _scale), MinTouch),
                            "< Back", _tabStyle))
             {
                 _menuPage = MenuPage.Home;
@@ -1354,7 +1473,8 @@ namespace CoralCascade
         private void DrawPearlChip()
         {
             float chipH = 30f * _scale;
-            var chipRect = new Rect(Screen.width - 128f * _scale, 12f * _scale, 118f * _scale, chipH);
+            var chipRect = new Rect(Screen.width - SafeAreaUtil.Right - 128f * _scale,
+                                    PageTop + 12f * _scale, 118f * _scale, chipH);
             GUI.DrawTexture(chipRect, PrimitiveSprites.RoundedRect(new Color(1f, 1f, 1f, 0.40f)));
             float pearlIcon = chipH - 10f * _scale;
             var old = GUI.color;
@@ -1809,12 +1929,36 @@ namespace CoralCascade
             }
         }
 
+        private string _chipScoreCache, _chipShotsCache, _chipTideCache;
+        private int _chipScoreValue = -1, _chipShotsValue = -1, _chipTideValue = -1;
+
+        /// <summary>Rebuilds a HUD chip's string only when its number actually changes.</summary>
+        private static string ChipText(ref string cache, ref int cachedValue, int value,
+                                       string prefix, string suffix)
+        {
+            if (cache == null || cachedValue != value)
+            {
+                cachedValue = value;
+                cache = prefix + value + suffix;
+            }
+            return cache;
+        }
+
         private void DrawTopBar()
         {
             float titleH = 30f * _scale;   // dedicated, centered level-title row
             float row1H = 52f * _scale;    // stat chips + pause
             float meterH = 24f * _scale;   // star-target meter
-            float h = titleH + row1H + meterH;
+
+            // Display cutout: the frosted PLATE runs full-bleed to the very top of the
+            // screen (a bar that stops below the notch reads as a bug), but every piece of
+            // CONTENT is pushed below the inset. _topBarRect covers the whole plate so
+            // pointer occlusion also protects the notch strip.
+            SafeAreaUtil.Refresh();
+            float insetTop = SafeAreaUtil.Top;
+            float insetL = SafeAreaUtil.Left, insetR = SafeAreaUtil.Right;
+            float barW = Mathf.Max(1f, Screen.width - insetL - insetR);
+            float h = insetTop + titleH + row1H + meterH;
             _topBarRect = new Rect(0, 0, Screen.width, h);
             // Frosted light bar over the bright water (deep-teal text sits on it), with a
             // soft shadow fading out below it so the bar reads as a layer, not a stripe.
@@ -1836,19 +1980,28 @@ namespace CoralCascade
             string title = idx >= 0
                 ? $"{_playingSection.NodePrefix} {idx + 1}"
                 : (_manager.CurrentLayout != null ? _manager.CurrentLayout.Name : "");
-            GUI.Label(new Rect(0, 0, Screen.width, titleH), title, _barTitleStyle);
+            GUI.Label(new Rect(insetL, insetTop, barW, titleH), title, _barTitleStyle);
 
             float pad = 10f * _scale;
-            float avail = Screen.width - pad * 2f;
-            GUILayout.BeginArea(new Rect(pad, titleH, avail, row1H));
+            float avail = barW - pad * 2f;
+            GUILayout.BeginArea(new Rect(insetL + pad, insetTop + titleH, avail, row1H));
             GUILayout.BeginHorizontal(GUILayout.Height(row1H));
 
             // The title row now owns the level name, so the whole chip row is free for stats:
             // chips left, pause right. Debug lives in the pause menu (no room on phone widths).
-            string scoreText = $"Score  <b>{_manager.Score.Total}</b>";
-            string shotsText = $"Shots  <b>{_manager.State.ShotsRemaining}</b>";
+            //
+            // GC: OnGUI runs several times per frame (Layout + Repaint + each event), so
+            // interpolating these three strings every pass was allocating ~6 strings/frame
+            // for the whole of gameplay. They only change when the VALUE changes, so cache
+            // on the value — string building is now rare instead of constant.
+            string scoreText = ChipText(ref _chipScoreCache, ref _chipScoreValue,
+                                        _manager.Score.Total, "Score  <b>", "</b>");
+            string shotsText = ChipText(ref _chipShotsCache, ref _chipShotsValue,
+                                        _manager.State.ShotsRemaining, "Shots  <b>", "</b>");
             string tideText = _manager.PressureActive
-                ? $"Tide  <b>{_manager.ShotsUntilPressure}</b>" : null;
+                ? ChipText(ref _chipTideCache, ref _chipTideValue,
+                           _manager.ShotsUntilPressure, "Tide  <b>", "</b>")
+                : null;
             float btnH = row1H - 12f * _scale;
             float pauseW = btnH; // icon-sized square: "II"
 
@@ -1880,7 +2033,8 @@ namespace CoralCascade
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
 
-            DrawStarMeter(new Rect(pad, titleH + row1H - 3f * _scale, Screen.width - pad * 2f, meterH));
+            DrawStarMeter(new Rect(insetL + pad, insetTop + titleH + row1H - 3f * _scale,
+                                   avail, meterH));
         }
 
         /// <summary>

@@ -162,6 +162,7 @@ namespace CoralCascade
             _line.positionCount = 0;
             if (fired)
             {
+                Sfx.Play(Sfx.Clip.Fire, 0.45f, UnityEngine.Random.Range(0.95f, 1.08f));
                 _currentColor = _nextColor;
                 _nextColor = DrawColor();
                 RefreshLoadedBubble();

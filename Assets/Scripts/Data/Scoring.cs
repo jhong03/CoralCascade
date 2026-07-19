@@ -198,12 +198,53 @@ namespace CoralCascade
     public static class GameSettings
     {
         private const string ShakeKey = "CoralCascade.Set.Shake";
+        private const string SfxKey = "CoralCascade.Set.Sfx";
+        private const string MusicKey = "CoralCascade.Set.Music";
+        private const string HapticsKey = "CoralCascade.Set.Haptics";
 
         /// <summary>Camera shake on big pops/cascades. Read by PopEffects.Shake.</summary>
         public static bool ShakeEnabled
         {
             get => PlayerPrefs.GetInt(ShakeKey, 1) == 1;
             set { PlayerPrefs.SetInt(ShakeKey, value ? 1 : 0); PlayerPrefs.Save(); }
+        }
+
+        /// <summary>Sound effects. Gated at the single Sfx.Play entry point.</summary>
+        public static bool SfxEnabled
+        {
+            get => PlayerPrefs.GetInt(SfxKey, 1) == 1;
+            set { PlayerPrefs.SetInt(SfxKey, value ? 1 : 0); PlayerPrefs.Save(); }
+        }
+
+        /// <summary>Ambient music bed. Gated at Sfx.SetMusic.</summary>
+        public static bool MusicEnabled
+        {
+            get => PlayerPrefs.GetInt(MusicKey, 1) == 1;
+            set { PlayerPrefs.SetInt(MusicKey, value ? 1 : 0); PlayerPrefs.Save(); }
+        }
+
+        /// <summary>Vibration on impactful moments. Gated at the single Haptics.Bump entry.</summary>
+        public static bool HapticsEnabled
+        {
+            get => PlayerPrefs.GetInt(HapticsKey, 1) == 1;
+            set { PlayerPrefs.SetInt(HapticsKey, value ? 1 : 0); PlayerPrefs.Save(); }
+        }
+    }
+
+    /// <summary>
+    /// Device vibration, behind the player's setting — one entry point, like PopEffects.Shake.
+    /// Handheld.Vibrate is a blunt ~500ms buzz on Android, so it is reserved for genuinely
+    /// big moments (level win/loss, the tide dropping), never per-pop: a bubble shooter that
+    /// buzzes on every shot is a bubble shooter people turn the haptics off in.
+    /// </summary>
+    public static class Haptics
+    {
+        public static void Bump()
+        {
+            if (!GameSettings.HapticsEnabled) return;
+#if UNITY_ANDROID || UNITY_IOS
+            if (Application.isMobilePlatform) Handheld.Vibrate();
+#endif
         }
     }
 }

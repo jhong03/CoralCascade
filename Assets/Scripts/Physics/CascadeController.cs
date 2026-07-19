@@ -99,6 +99,12 @@ namespace CoralCascade
                                                    new Color(0.55f, 0.95f, 1f));
             }
 
+            // Audio rides the same tiers as the visuals: bigger clusters pop lower and
+            // fatter, and a drop gets its own layer under the pop.
+            Sfx.Play(clusterSize >= 6 ? Sfx.Clip.PopBig : Sfx.Clip.Pop,
+                     0.85f, Mathf.Lerp(1.15f, 0.8f, Mathf.Clamp01((clusterSize - 3) / 9f)));
+            if (dropped > 0) Sfx.Play(Sfx.Clip.Drop, 0.55f, Mathf.Lerp(1.1f, 0.85f, Mathf.Clamp01(dropped / 10f)));
+
             var fx = PopEffects.Instance;
             if (fx != null)
             {
@@ -203,6 +209,7 @@ namespace CoralCascade
                     _manager.BoardView.RefreshCell(n);
                     if (PopEffects.Instance != null)
                         PopEffects.Instance.ThawGlint(_manager.Board.Grid.CellToWorld(n.Col, n.Row));
+                    Sfx.Play(Sfx.Clip.Thaw, 0.5f);
                 }
             }
         }
@@ -332,6 +339,9 @@ namespace CoralCascade
             if (CascadeSize > before)
             {
                 SecondaryChains++;
+                // Each successive chain in a burst rings brighter — the audio ladder mirrors
+                // the CHAIN REACTION → DOUBLE CHAIN → UNSTOPPABLE banner ladder.
+                Sfx.Play(Sfx.Clip.Chain, 0.9f, 1f + 0.12f * Mathf.Min(SecondaryChains, 4));
                 if (PopEffects.Instance != null)
                 {
                     PopEffects.Instance.ImpactWave(impactPos); // shockwave + kick at the hit

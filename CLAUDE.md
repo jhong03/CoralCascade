@@ -5,6 +5,38 @@ Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `Coral
 
 ## NEXT SESSION — start here
 
+### ⇢ TEST THIS FIRST (2026-07-19 night session — Play prep + UX + audio)
+
+Everything below is compile-verified and, where possible, verified by rendering the actual
+output (icon PNGs, audio waveforms, camera-framing maths across 7 device shapes). **None of
+it has been seen running.** Publishing checklist: `PLAY_STORE_CHECKLIST.md`.
+
+**Do this one FIRST — it's a single click and it finishes the icon setup:**
+> Unity ▸ **Coral Cascade ▸ Play Store ▸ Apply Release Settings**, then **Verify Release
+> Settings**. Icons cannot be assigned by hand-editing YAML, so the menu item does it.
+
+Then, in rough order of "how badly would this hurt":
+1. **DOES THE GAME EVEN APPEAR?** The build list pointed at the empty `SampleScene` — a
+   build would have launched blank. Now `Phase1Prototype`. Build once and confirm.
+2. **AUDIO** — brand new, entirely synthesised at runtime (no asset files). Listen for:
+   pops that pitch DOWN as clusters get bigger, a low tide swell, win/lose flourishes, and
+   the ambient pad. Check the pad's 8-second loop doesn't click at the seam, and that rapid
+   cascades don't sound machine-gunny (8-voice pool). Toggles: Settings ▸ Music / Sound.
+3. **CAMERA FRAMING CHANGED FOR EVERY LEVEL.** It now fits the REAL screen aspect instead
+   of a hardcoded 9:19.5. Verify on a wide Game-view preset (tablet 4:3) AND a tall one
+   (21:9): the board should never clip columns, and the danger line + launcher should
+   always be visible. This is the riskiest change of the session.
+4. **Safe area** — test with a notch preset. The frosted top bar should run to the very top
+   of the screen while its TEXT sits below the cutout. Back buttons/pearl chip too.
+5. **Touch targets** grew to 44·scale (~52dp) for Back/Settings/toggles, which pushed the
+   Home page header down. Check nothing collides on a small screen.
+6. **Settings page** now has Music / Sound / Vibration / Screen shake + Privacy. Check it
+   fits without scrolling on a short screen, and that Privacy scrolls.
+7. **Vibration** fires only on tide drops and win/lose — deliberately not per-pop.
+
+**Known-not-done (deliberate):** keystore (needs your password), hosted privacy-policy URL,
+store listing art, and every Play Console form. All listed in the checklist.
+
 Everything is **committed & pushed** (late-game retune + 50→70 levels + procedural
 stone/critter + debris fade + banner-width fix + Pearl Eel shimmer). Working tree is clean
 apart from the pre-existing Unity churn listed under "Uncommitted" below, which was left
@@ -113,6 +145,67 @@ and generator-verified by running the REAL LevelCatalog, NOT play-tested).** Use
   scattered because the columns it filled were too sparse to stack in. Fixes: replaced
   Teeth with Spires (mask >1.0 to DEFEAT the taper) and gave Pillars a 1.6 mask to thicken
   its own columns first. **Always dump a generated board before trusting a generator change.**
+
+**2026-07-19 (night) — PLAY-STORE PREP, DEVICE FIT, UI PASS, AUDIO (uncommitted at time of
+writing; compile-verified, output-verified where renderable, NOT play-tested).** User asked
+what the Settings page still needed and then for a full UI/UX cleanup + Play prep, run
+autonomously to completion. Full requirement detail: `PLAY_STORE_CHECKLIST.md`.
+
+- **THE BUILD SHIPPED AN EMPTY SCENE.** `EditorBuildSettings` listed only
+  `SampleScene.unity`; the game lives in `Phase1Prototype.unity`, which was not in the build
+  list at all. Any APK built before this fix would have launched to a blank screen. Fixed;
+  SampleScene retained but disabled. **This was committed, not local churn — it had been
+  true for a long time.**
+- **Other build blockers fixed:** `applicationIdentifier` had no Android entry at all (would
+  have fallen back to a `DefaultCompany` id, which is PERMANENT once published) → now
+  `com.jhong03.coralcascade`; company/product names; target SDK 0 (auto) → **36**. NOTE:
+  API 35 is today's floor but **36 is mandatory from 2026-08-31**, so 36 now avoids a redo.
+  IL2CPP + ARM64 were already correct (an early grep of mine truncated the value and I
+  briefly believed otherwise — the lesson is to grep with context, not just the key line).
+- **App ICON generated** procedurally in the game's palette (glossy orb trio on a lagoon
+  gradient) at `Assets/Art/Icon/`, checked at 48px and under a circular launcher mask.
+- **`Assets/Editor/PlayReadiness.cs`** — menu items to APPLY and VERIFY release settings.
+  Icon assignment goes through `PlayerSettings.SetPlatformIcons` because that structure is
+  nested/platform-keyed and hand-written YAML is how you silently end up with no launcher
+  icon. It enumerates `GetSupportedIconKinds` rather than naming `AndroidPlatformIconKind` —
+  that type lives in the Android platform EXTENSION and won't compile without the module.
+  Verify also fails the build if the game scene ever falls out of the build list again.
+- **CAMERA FRAMING now uses the real `Camera.aspect`** (was a hardcoded 9:19.5). It fits the
+  board WIDTH exactly on any device and separately guarantees the danger row + launcher stay
+  on screen, solved analytically because the UI reservation is a pixel height that itself
+  depends on ortho. Verified across 7 device shapes × 3 column counts (`framing.ps1`): no
+  horizontal clipping anywhere, and the tablet case is now height-bound instead of shrinking
+  the board to a postage stamp. **This changes framing on every level — the riskiest change.**
+- **SAFE AREA** (`SafeAreaUtil`): cutout/gesture-bar insets applied to the top bar, page
+  headers, back buttons, pearl chip, map/tank content and overlay centring. Backgrounds stay
+  full-bleed on purpose — a frosted bar that stops below the notch reads as a bug.
+  COORDINATE TRAP recorded in the file: `Screen.safeArea` is bottom-left origin, IMGUI is
+  top-left, so the GUI top inset comes from `safeArea.yMax`. Reversing those two puts the
+  HUD under the notch on exactly the devices you were protecting.
+- **Touch targets**: `MinTouch` = 44·scale (~52dp vs Android's 48dp guidance; the old
+  30·scale chrome buttons were ~35dp). Raising a button REQUIRES moving what sits below it —
+  the Home header is now derived from MinTouch rather than hardcoded offsets.
+- **Per-frame GC**: the three HUD chips were interpolating strings on every OnGUI pass
+  (which runs several times per frame, all through gameplay). Now cached on the value.
+- **AUDIO — `Sfx.cs`, fully SYNTHESISED at runtime**, same principle as PrimitiveSprites:
+  the game still requires zero imported assets, and there is no licence question for the
+  store build. 12 one-shots + an 8-second ambient pad, 8-voice pool, wired into the existing
+  effect seams (pop tier, drop, chain, thaw, tide, fire, attach, win/lose). Music/SFX/
+  Vibration toggles are now REAL settings — the page's no-dead-switches rule finally allows
+  them. `Haptics.Bump()` is deliberately reserved for tide drops and win/lose: Android's
+  `Handheld.Vibrate` is a blunt ~500ms buzz and per-pop haptics get switched off by players.
+- **VERIFY-THE-WAVEFORM technique** (new): the synthesis was replicated in System.Drawing and
+  plotted (`RenderAudio.cs`). It caught three things code review would not: the pad peaked
+  at 1.035 (**would clip**), the stingers ended on a non-zero sample (**click**), and
+  win/lose notes were confined to their own slots so they decayed to silence between notes —
+  four detached blips, not a flourish. Fixed by normalising to a 0.9 target, a 3ms fade-out
+  (**suppressed for the looping pad — a fade there would notch the seam**), and letting each
+  arpeggio note ring 3× its slot into the ones after it.
+- **PRIVACY PAGE added in-app** (Settings ▸ Privacy). Play requires a policy in the Console
+  AND "a link **or text** within the app" — text satisfies the in-app half without needing a
+  hosted URL. **The text asserts no data collection, no network, no ads, no analytics, which
+  is true TODAY. It must be rewritten together with the Data safety form the moment ads or
+  analytics land.**
 
 **2026-07-19 — PEARL EEL MADE VISUALLY DISTINCT (uncommitted; compile-verified, previewed
 as a rendered PNG, NOT play-tested).** User: "Pearl Eel doesn't look any different from the

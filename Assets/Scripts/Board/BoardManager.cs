@@ -210,10 +210,13 @@ namespace CoralCascade
 
             if (cluster.Count >= 3)
             {
-                Cascade.ResolveMatch(cluster);
+                Cascade.ResolveMatch(cluster); // fires its own pop audio, tiered by size
             }
             else
             {
+                // A shot that just sticks gets the soft knock — the absence of a pop is
+                // itself feedback, so it must not be silent.
+                Sfx.Play(Sfx.Clip.Attach, 0.5f);
                 // No-op on a stable board. Matters when a concurrent cascade's secondary
                 // chain knocked out this bubble's support while it was in flight.
                 Cascade.ResolveFloating();
@@ -276,6 +279,9 @@ namespace CoralCascade
             bool ok = Board.ShiftDown(newRow);
             BoardView.RebuildAll(); // every view moved; same-frame-safe teardown inside
 
+            // The tide is the level's threat — it gets the low swell AND a haptic bump.
+            Sfx.Play(Sfx.Clip.Tide, 0.9f);
+            Haptics.Bump();
             var fx = PopEffects.Instance;
             if (fx != null)
             {
