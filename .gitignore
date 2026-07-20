@@ -49,3 +49,6 @@ keystore.properties
 /Builds/
 *.apk
 *.aab
+
+# Editor scratch
+.utmp/
