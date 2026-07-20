@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEditor;
 using UnityEditor.Build;
+using UnityEditor.Build.Profile;
 using UnityEngine;
 
 namespace CoralCascade.EditorTools
@@ -164,11 +165,24 @@ namespace CoralCascade.EditorTools
             if (!anyIcon) problems.Add("no launcher icon assigned");
 
             // The blank-app trap: the build must actually contain the game scene.
+            //
+            // Unity 6 Build Profiles can OVERRIDE the global scene list per profile, so
+            // checking EditorBuildSettings.scenes alone can green-light a blank build —
+            // exactly the failure this check exists to prevent. Read whichever list the
+            // active profile will actually use.
+            var profile = BuildProfile.GetActiveBuildProfile();
+            bool usingProfileList = profile != null && profile.overrideGlobalScenes;
+            var scenes = usingProfileList ? profile.scenes : EditorBuildSettings.scenes;
+            string listName = usingProfileList
+                ? $"the '{profile.name}' build profile's own scene list"
+                : "Build Settings' scene list";
+
             bool gameSceneEnabled = false;
-            foreach (var s in EditorBuildSettings.scenes)
+            foreach (var s in scenes)
                 if (s.enabled && s.path.EndsWith("Phase1Prototype.unity")) gameSceneEnabled = true;
             if (!gameSceneEnabled)
-                problems.Add("Phase1Prototype.unity is not an enabled scene in Build Settings — the build would launch empty");
+                problems.Add($"Phase1Prototype.unity is not an enabled scene in {listName} — " +
+                             "the build would launch empty");
 
             if (string.IsNullOrEmpty(PlayerSettings.Android.keystoreName))
                 problems.Add("no keystore configured (needed for a release AAB; see the publishing checklist)");
