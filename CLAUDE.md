@@ -5,6 +5,47 @@ Ads + one remove-ads IAP; physics-driven cascades + reef meta. Full plan: `Coral
 
 ## NEXT SESSION — start here
 
+### ⇢ STATE AS OF 2026-07-20: IT BUILDS AND RUNS ON A REAL PHONE 🎉
+
+A 36 MB APK installed and ran on the user's device — the first time any of this has been
+seen outside the editor. Android Build Support was installed, the release settings applied,
+icons assigned, Diagnostics disabled. Everything is committed and pushed.
+
+**THE WHOLE BACKLOG IS NOW "GO PLAY IT".** Three sessions of work is compile-verified,
+measured and generator-verified, but barely any of it has been *seen or heard*. In roughly
+five minutes of listening the user found two real bugs I could not have caught (squeaky
+pops, inaudible music). Expect more.
+
+1. **Play a dozen levels.** Camera framing on the real aspect, safe area under the notch,
+   the critter/stone art, the new waves 51–70, and whether **Reef 50** — where this all
+   started — is actually winnable now.
+2. **Confirm the pause menu has NO "Debug Tools" button** in a release build.
+3. **The oldest open bug is now visible for the first time:** in-level ReefBackdrop decor
+   renders as pale untextured quads (open since 2026-07-16; same root cause that hid the ice
+   and left critters as blank white balls). A device build is exactly what the stalled
+   diagnosis needed.
+4. **Audio taste pass** — the bundled CC0 track (`theme_a_new_town.mp3`) is licence-verified
+   but NOBODY HAS HEARD IT. Swap it by dropping a file in `Assets/Resources/Music/`
+   (see `MUSIC_CREDITS.md`). Music now fades out during levels, in on menus.
+
+### ⇢ THEN, IN ORDER (agreed with the user 2026-07-20)
+
+1. **Store listing** — feature graphic, screenshots, description. Install-driving work;
+   I offered to draft copy and generate the art.
+2. **Monetization** — `ADS_IMPLEMENTATION_PLAN.md`, fully written and ready to execute.
+   **Decision made: Google AdMob, single network, no mediation** (no traffic minimum, UMP
+   consent SDK bundled, Families-self-certified — mediation adapters are not, and that
+   programme is closed to new applicants). Rewarded-for-pearls + interstitials every 3–4
+   levels + remove-ads IAP. **One open question flagged for the user: whether a rewarded
+   "continue" is allowed, since it would grant extra shots and touch the fairness boundary.**
+   ⚠️ Integrating ads **invalidates the current "no data collected" privacy position** —
+   `GameFlow.PrivacyText` and `docs/privacy-policy.md` must be rewritten in the same commit.
+3. **Play submission** — keystore (needs the user's password), GitHub Pages for the privacy
+   URL, and the Console forms. All in `PLAY_STORE_CHECKLIST.md`.
+
+**Standing advice given:** the bottleneck on revenue is installs, not the ad mechanism.
+Retention and store listing beat ad tuning at this stage.
+
 ### ⇢ TEST THIS FIRST (2026-07-19 night session — Play prep + UX + audio)
 
 Everything below is compile-verified and, where possible, verified by rendering the actual
@@ -234,6 +275,39 @@ autonomously to completion. Full requirement detail: `PLAY_STORE_CHECKLIST.md`.
     — my first spectrum reported a phantom 31% above 5 kHz. Use a Hann-windowed contiguous
     block at the FULL sample rate, and average several windows across the loop so the answer
     doesn't depend on whether one window landed between notes.
+**2026-07-20 — FIRST DEVICE BUILD, and the fixes it forced.** Also: debug tools stripped
+from release (`#if UNITY_EDITOR || DEVELOPMENT_BUILD` on both the pause-menu entry and the
+`DebugHUD` component itself — verified against all three compile configurations, since
+conditional compilation breaks in the config you didn't test), and music turned into a MENU
+bed that fades out over 0.6s on level start and back in on return (unscaled time, so a pause
+doesn't stretch the fade).
+
+- **Getting to a build surfaced four things, none of them code:**
+  1. **Android Build Support was never installed** — only WebGL and Windows player modules.
+     Android settings SERIALISE fine without it, so the inspector looked configured; the
+     only symptom was my tool reporting "no launcher icon assigned". `PlayReadiness` now
+     checks `BuildPipeline.IsBuildTargetSupported` FIRST and says what to install.
+  2. **minSdk 25 was impossible** — Unity 6 hard-refuses below 26. The earlier research
+     checked *Play policy* (no floor) and never asked what the *engine* accepts. **Lesson:
+     the tooling's own limits bind independently of the store's.**
+  3. **Gradle "Tag mismatch!"** — a Java TLS/AEAD failure downloading dependencies. curl
+     fetched the same URLs fine, so the network was healthy and Java's TLS path was not.
+     Fixed by downloading the two artifacts and seeding Gradle's cache at the sha1-named
+     directories it expects (that hash IS the directory name).
+  4. **"Missing Project ID"** — a `cloudProjectId` was set while every service was off.
+     Nothing here needs one; linking a Unity Cloud project is also what re-enables data
+     collection, so DON'T create one to silence it.
+- **`.meta` files were untracked** for the icons, editor script and music. Unity regenerates
+  missing metas with NEW GUIDs, so a fresh clone would have silently disconnected every one
+  of those references. Now committed.
+
+**2026-07-20 — MONETIZATION DECIDED (not built).** See `ADS_IMPLEMENTATION_PLAN.md`.
+AdMob, single network. Rewarded-for-pearls is the safe earner *because pearls are
+cosmetic-only* — it respects the fairness boundary by construction. Banners rejected (a
+13-column portrait board can't spare the pixels). Sequenced AFTER play-testing and the store
+listing, deliberately: ad placement depends on where players actually stall, and the real
+constraint on revenue is installs.
+
 - **PRIVACY PAGE added in-app** (Settings ▸ Privacy). Play requires a policy in the Console
   AND "a link **or text** within the app" — text satisfies the in-app half without needing a
   hosted URL. **The text asserts no data collection, no network, no ads, no analytics, which
