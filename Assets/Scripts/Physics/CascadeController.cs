@@ -101,8 +101,10 @@ namespace CoralCascade
 
             // Audio rides the same tiers as the visuals: bigger clusters pop lower and
             // fatter, and a drop gets its own layer under the pop.
+            // Narrow pitch range: 1.15 pushed a plain 3-match up another semitone or two,
+            // which is where "squeak" came from even after the base pitch came down.
             Sfx.Play(clusterSize >= 6 ? Sfx.Clip.PopBig : Sfx.Clip.Pop,
-                     0.85f, Mathf.Lerp(1.15f, 0.8f, Mathf.Clamp01((clusterSize - 3) / 9f)));
+                     0.85f, Mathf.Lerp(1.06f, 0.84f, Mathf.Clamp01((clusterSize - 3) / 9f)));
             if (dropped > 0) Sfx.Play(Sfx.Clip.Drop, 0.55f, Mathf.Lerp(1.1f, 0.85f, Mathf.Clamp01(dropped / 10f)));
 
             var fx = PopEffects.Instance;

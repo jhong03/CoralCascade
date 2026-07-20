@@ -201,6 +201,17 @@ autonomously to completion. Full requirement detail: `PLAY_STORE_CHECKLIST.md`.
   four detached blips, not a flourish. Fixed by normalising to a 0.9 target, a 3ms fade-out
   (**suppressed for the looping pad — a fade there would notch the seam**), and letting each
   arpeggio note ring 3× its slot into the ones after it.
+- **AUDIO PITCH RETUNE 2026-07-20** (first real device listen: "the pops sound like a very
+  high pitched squeak"). Two compounding errors. (1) The base pitches were an octave and a
+  half too high — Pop's amplitude-weighted centre was **978 Hz as played**, above A5; a
+  bubble bloop belongs at 150-400 Hz. (2) The glide used `Lerp(f0, f1, t*t)` under a comment
+  reading "fast early glide" — **t² is SLOW early**, so it sat at the top of its range: 10ms
+  into the old Pop it had fallen from 880 Hz to 875 Hz. Now `1 - e^(-5t)`, which falls fast
+  then settles. New centres: Pop 374 Hz, PopBig 216 Hz. The caller's pitch spread also
+  narrowed (1.15..0.8 → 1.06..0.84) since 1.15 pushed a plain 3-match up again. Thaw stays
+  glassy at ~1425 Hz on purpose — that contrast is the point. **LESSON: waveform plots
+  verified envelope and clipping but say nothing about PITCH; measure the
+  amplitude-weighted centre frequency in Hz and compare it against a musical reference.**
 - **PRIVACY PAGE added in-app** (Settings ▸ Privacy). Play requires a policy in the Console
   AND "a link **or text** within the app" — text satisfies the in-app half without needing a
   hosted URL. **The text asserts no data collection, no network, no ads, no analytics, which

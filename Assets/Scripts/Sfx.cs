@@ -99,20 +99,22 @@ namespace CoralCascade
         {
             switch (clip)
             {
-                // A bubble pop: a fast downward pitch blip with a little noise transient.
-                case Clip.Pop:     return Blip("Pop", 0.10f, 880f, 420f, 0.35f, 0.004f);
-                case Clip.PopBig:  return Blip("PopBig", 0.18f, 1180f, 320f, 0.55f, 0.010f);
+                // A bubble pop: a fast downward "bloop", round rather than bright. Bigger
+                // clusters pop LOWER and fatter, which is also how the caller pitches them.
+                case Clip.Pop:     return Blip("Pop", 0.09f, 520f, 185f, 0.35f, 0.006f, 0.07f);
+                case Clip.PopBig:  return Blip("PopBig", 0.16f, 400f, 115f, 0.55f, 0.012f, 0.10f);
                 // Firing is an upward "thup"; attaching is a soft low knock.
-                case Clip.Fire:    return Blip("Fire", 0.07f, 300f, 620f, 0.22f, 0.002f);
-                case Clip.Attach:  return Blip("Attach", 0.06f, 240f, 170f, 0.20f, 0.004f);
+                case Clip.Fire:    return Blip("Fire", 0.07f, 200f, 430f, 0.22f, 0.003f, 0.08f);
+                case Clip.Attach:  return Blip("Attach", 0.06f, 205f, 130f, 0.20f, 0.005f, 0.05f);
                 // Falling debris: descending, wetter.
-                case Clip.Drop:    return Blip("Drop", 0.22f, 520f, 120f, 0.30f, 0.012f);
+                case Clip.Drop:    return Blip("Drop", 0.22f, 360f, 90f, 0.30f, 0.014f, 0.14f);
                 // A chain knock is the jackpot tier — brighter, with a ring.
-                case Clip.Chain:   return Blip("Chain", 0.20f, 1400f, 700f, 0.45f, 0.006f);
-                case Clip.Thaw:    return Blip("Thaw", 0.16f, 2100f, 1500f, 0.22f, 0.020f);
+                case Clip.Chain:   return Blip("Chain", 0.20f, 700f, 250f, 0.45f, 0.008f, 0.30f);
+                // Ice SHOULD stay glassy and high — that contrast is the point.
+                case Clip.Thaw:    return Blip("Thaw", 0.16f, 1700f, 1150f, 0.22f, 0.020f, 0.40f);
                 // The tide is a low, ominous swell.
-                case Clip.Tide:    return Blip("Tide", 0.55f, 150f, 70f, 0.40f, 0.030f);
-                case Clip.Tap:     return Blip("Tap", 0.04f, 640f, 560f, 0.16f, 0.001f);
+                case Clip.Tide:    return Blip("Tide", 0.55f, 120f, 52f, 0.40f, 0.030f, 0.22f);
+                case Clip.Tap:     return Blip("Tap", 0.04f, 430f, 360f, 0.16f, 0.002f, 0.10f);
                 case Clip.Pearl:   return Arpeggio("Pearl", new[] { 880f, 1320f }, 0.16f, 0.28f);
                 // Win: a rising major triad. Lose: the same shape falling and detuned.
                 case Clip.Win:     return Arpeggio("Win", new[] { 523f, 659f, 784f, 1047f }, 0.13f, 0.40f);
@@ -123,11 +125,21 @@ namespace CoralCascade
 
         /// <summary>
         /// One enveloped tone gliding from <paramref name="f0"/> to <paramref name="f1"/>,
-        /// with a touch of noise for the "wet" transient. A pure sine reads as a beep; the
-        /// glide plus noise is what makes it read as a bubble.
+        /// with a touch of noise for the "wet" transient.
+        ///
+        /// TWO THINGS MAKE THIS A BLOOP RATHER THAN A SQUEAK (user-reported 2026-07-20,
+        /// "the pops sound like a very high pitched squeak"):
+        ///  • PITCH. A bubble pop lives around 150-400 Hz. The first version started at
+        ///    880 Hz with a 1760 Hz harmonic stacked on it — an octave and a half too high.
+        ///  • GLIDE SHAPE. The fall has to happen mostly in the first few milliseconds.
+        ///    The first version used Lerp(f0, f1, t*t), and t² is SLOW early — so it sat up
+        ///    at the top of its range for most of the clip. 1 - e^-kt falls fast then settles,
+        ///    which is what the ear reads as a drop of water.
+        /// <paramref name="bright"/> is the 2nd-harmonic level: near 0 for round, watery
+        /// sounds, higher for glassy ones like the ice thaw.
         /// </summary>
         private AudioClip Blip(string name, float seconds, float f0, float f1,
-                               float amp, float noiseAmt)
+                               float amp, float noiseAmt, float bright = 0.12f)
         {
             int n = Mathf.Max(1, (int)(SampleRate * seconds));
             var data = new float[n];
@@ -135,12 +147,12 @@ namespace CoralCascade
             for (int i = 0; i < n; i++)
             {
                 float t = (float)i / n;
-                float freq = Mathf.Lerp(f0, f1, t * t);          // fast early glide
+                float freq = Mathf.Lerp(f0, f1, 1f - Mathf.Exp(-5f * t)); // fast early fall
                 phase += 2f * Mathf.PI * freq / SampleRate;
                 // Percussive envelope: near-instant attack, exponential decay.
                 float env = Mathf.Exp(-5.5f * t) * (1f - Mathf.Exp(-90f * t));
                 float noise = (float)(_noise.NextDouble() * 2.0 - 1.0) * noiseAmt * Mathf.Exp(-22f * t);
-                data[i] = (Mathf.Sin(phase) * 0.75f + Mathf.Sin(phase * 2f) * 0.2f + noise) * env * amp;
+                data[i] = (Mathf.Sin(phase) + Mathf.Sin(phase * 2f) * bright + noise) * env * amp;
             }
             return FromData(name, data);
         }
