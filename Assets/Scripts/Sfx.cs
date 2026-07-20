@@ -42,6 +42,13 @@ namespace CoralCascade
         private const int SampleRate = 44100;
         private const int Voices = 8;
 
+        /// <summary>
+        /// Drop a music file here (any name, any format Unity imports) and it replaces the
+        /// procedural bed. See MUSIC_CREDITS.md — only ever put CC0 / public-domain or
+        /// properly-licensed audio in this folder.
+        /// </summary>
+        private const string MusicPath = "Music";
+
         private readonly Dictionary<Clip, AudioClip> _cache = new Dictionary<Clip, AudioClip>();
         private AudioSource[] _voices;
         private int _nextVoice;
@@ -241,8 +248,24 @@ namespace CoralCascade
                 self._music.playOnAwake = false;
                 self._music.loop = true;
                 self._music.spatialBlend = 0f;
-                self._music.volume = 0.30f;
-                self._music.clip = BuildMusic();
+
+                // Prefer a REAL recording if one has been dropped into Resources/Music —
+                // synthesis can get the notes right but not the warmth, and a single
+                // synthesised timbre with no timing variation reads as robotic (user,
+                // 2026-07-20). Any filename works; the first clip found wins. Falls back to
+                // the procedural waltz so the game still never REQUIRES an imported asset,
+                // same contract as BubbleArt/PrimitiveSprites.
+                var imported = Resources.LoadAll<AudioClip>(MusicPath);
+                if (imported != null && imported.Length > 0)
+                {
+                    self._music.clip = imported[0];
+                    self._music.volume = 0.34f;
+                }
+                else
+                {
+                    self._music.clip = BuildMusic();
+                    self._music.volume = 0.30f;
+                }
             }
             if (!self._music.isPlaying) self._music.Play();
         }
