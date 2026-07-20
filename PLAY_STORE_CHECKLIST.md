@@ -20,6 +20,7 @@ Status as of 2026-07-19. Requirements verified against official Google sources o
 | Safe area | `renderOutsideSafeArea = true` + UI insets | pairs with the `SafeAreaUtil` work |
 | App icon | `Assets/Art/Icon/` | generated; adaptive foreground/background + legacy/round |
 | Privacy policy (in-app) | Settings ▸ Privacy | Play accepts a link **or text** in-app; this is the text half |
+| Unity Diagnostics | **off** (verified 2026-07-20) | `UnityConnectSettings.asset` → `m_EngineDiagnosticsEnabled: 0`, all services `m_Enabled: 0`. This is what makes the "no data collected" Data safety answer truthful — **re-check it if you ever link a Unity Cloud project**, which is also what triggers the "Missing Project ID" build prompt |
 
 ### One manual step
 
