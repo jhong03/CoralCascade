@@ -358,6 +358,9 @@ namespace CoralCascade
             // The star-target splash waits its turn: it starts when the tutorial closes.
             _splashUntil = _pendingTutorials.Count > 0 ? 0f : Time.unscaledTime + SplashSeconds;
             _screen = FlowScreen.Playing;
+            // Music is a MENU bed: in a level it competes with the pops and cascades that
+            // carry the feedback, so it fades out for the duration of play.
+            Sfx.SetMusic(false);
         }
 
         /// <summary>
@@ -451,6 +454,7 @@ namespace CoralCascade
             _menuPage = MenuPage.SectionMap;    // back from a level lands on its route page
             _lastDrawnPage = (MenuPage)(-1);    // replay the page slide-in on return
             _screen = FlowScreen.LevelSelect;
+            Sfx.SetMusic(true); // back in the menus — the bed fades in again
         }
 
         private int CurrentLevelIndex()
@@ -2427,7 +2431,11 @@ namespace CoralCascade
             GUILayout.Space(10f * _scale);
             if (GUILayout.Button("Level Select", _buttonStyle, GUILayout.Height(btnH)))
                 QuitToLevelSelect();
-            // Dev tools live here now — the in-level HUD has no room on phone widths.
+            // Dev tools live here — the in-level HUD has no room on phone widths.
+            // COMPILED OUT OF RELEASE BUILDS: a shipped game must not expose a level-warp
+            // and board-editing harness. Kept for the editor and development builds rather
+            // than deleted, so it is still there when it's needed.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (_debugHud != null)
             {
                 GUILayout.Space(10f * _scale);
@@ -2437,6 +2445,7 @@ namespace CoralCascade
                     Resume(); // the harness is unusable behind a frozen pause scrim
                 }
             }
+#endif
             EndPanel();
         }
 

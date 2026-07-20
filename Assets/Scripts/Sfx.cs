@@ -53,6 +53,22 @@ namespace CoralCascade
         private AudioSource[] _voices;
         private int _nextVoice;
         private AudioSource _music;
+        private bool _musicWanted;
+        private float _musicVolume = 0.30f;   // target level once faded in
+
+        /// <summary>Seconds to fade the music bed in or out. A hard cut mid-phrase is jarring.</summary>
+        private const float MusicFadeSeconds = 0.6f;
+
+        private void Update()
+        {
+            if (_music == null) return;
+            // Unscaled: the music must keep fading during a pause (timeScale 0) and through
+            // the slow-mo beat, neither of which should stretch a fade.
+            float target = _musicWanted && GameSettings.MusicEnabled ? _musicVolume : 0f;
+            _music.volume = Mathf.MoveTowards(_music.volume, target,
+                                              (_musicVolume / MusicFadeSeconds) * Time.unscaledDeltaTime);
+            if (_music.volume <= 0.001f && _music.isPlaying) _music.Stop();
+        }
 
         // Deterministic noise so a given clip sounds identical every session.
         private System.Random _noise = new System.Random(0xC0A1);
@@ -235,11 +251,10 @@ namespace CoralCascade
             if (self == null) return;
             if (!GameSettings.MusicEnabled) on = false;
 
-            if (!on)
-            {
-                if (self._music != null) self._music.Stop();
-                return;
-            }
+            if (self._musicWanted == on && self._music != null) return; // cheap to call often
+            self._musicWanted = on;
+
+            if (!on) return; // Update fades it out, then stops the source
             if (self._music == null)
             {
                 var go = new GameObject("Music");
@@ -259,13 +274,14 @@ namespace CoralCascade
                 if (imported != null && imported.Length > 0)
                 {
                     self._music.clip = imported[0];
-                    self._music.volume = 0.34f;
+                    self._musicVolume = 0.34f;
                 }
                 else
                 {
                     self._music.clip = BuildMusic();
-                    self._music.volume = 0.30f;
+                    self._musicVolume = 0.30f;
                 }
+                self._music.volume = 0f; // Update fades it up
             }
             if (!self._music.isPlaying) self._music.Play();
         }

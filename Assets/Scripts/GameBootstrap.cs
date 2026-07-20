@@ -71,7 +71,12 @@ namespace CoralCascade
             _gizmos = systems.AddComponent<GridGizmoRenderer>();
             _cascade = systems.AddComponent<CascadeController>();
             _manager = systems.AddComponent<BoardManager>();
-            var hud = systems.AddComponent<DebugHUD>();
+            // The debug harness is not created at all in a release build — see GameFlow's
+            // pause menu, where its entry point is compiled out for the same reason.
+            DebugHUD hud = null;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            hud = systems.AddComponent<DebugHUD>();
+#endif
             var flow = systems.AddComponent<GameFlow>();
             var effects = systems.AddComponent<PopEffects>();
             effects.Init(_cam);
@@ -90,8 +95,8 @@ namespace CoralCascade
             _launcher.Init(_manager, _cam, BubbleDiameter, _launcher.transform.position);
             // Debug harness keeps just the 5 acceptance boards; the level map builds its
             // own sections (Tutorial Reef + Adventure) from LevelCatalog.
-            hud.Init(_manager, _cascade, _gizmos, TestBoards.All);
-            flow.Init(_manager, hud);
+            if (hud != null) hud.Init(_manager, _cascade, _gizmos, TestBoards.All);
+            flow.Init(_manager, hud); // hud is null in release — GameFlow already null-checks
 
             Sfx.SetMusic(true); // no-ops when the player has music off
 
