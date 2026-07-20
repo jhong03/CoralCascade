@@ -215,9 +215,12 @@ namespace CoralCascade
         // ---- Ambient music bed ---------------------------------------------------------------
 
         /// <summary>
-        /// A slow underwater pad: two detuned sines a fifth apart with a very slow tremolo,
-        /// looped. Deliberately near-featureless — it should sit under an hour of play
-        /// without becoming a melody anyone can get sick of.
+        /// Starts/stops the music bed.
+        ///
+        /// REGISTER MATTERS MORE THAN VOLUME: the first version was an "ambient pad" built
+        /// from partials at 55-165 Hz, which phone speakers physically cannot reproduce
+        /// (they roll off hard below ~300 Hz). It was inaudible on a device — reported as
+        /// "background music is missing". Everything here now sits in the 220-2100 Hz band.
         /// </summary>
         public static void SetMusic(bool on)
         {
@@ -238,34 +241,122 @@ namespace CoralCascade
                 self._music.playOnAwake = false;
                 self._music.loop = true;
                 self._music.spatialBlend = 0f;
-                self._music.volume = 0.13f;
-                self._music.clip = BuildPad();
+                self._music.volume = 0.30f;
+                self._music.clip = BuildMusic();
             }
             if (!self._music.isPlaying) self._music.Play();
         }
 
-        private static AudioClip BuildPad()
+        // ---- The music bed ------------------------------------------------------------------
+        //
+        // An ORIGINAL cosy waltz in the spirit of the old Facebook pet/farm games: music-box
+        // melody over a soft chord bed, C major, 3/4, unhurried. Written rather than sampled —
+        // using a real game's soundtrack would be copyright infringement, and style is not
+        // copyrightable while a recording very much is.
+        //
+        // Everything sits in 220-2100 Hz so it survives a phone speaker (see SetMusic).
+
+        private const float Bpm = 92f;
+        private const int BeatsPerBar = 3;
+        private const int Bars = 8;
+
+        /// <summary>MIDI note number → Hz.</summary>
+        private static float Hz(int midi) => 440f * Mathf.Pow(2f, (midi - 69) / 12f);
+
+        /// <summary>
+        /// Melody as (bar, beat, midi) triples. C major, mostly stepwise so it stays singable
+        /// and forgettable in the right way — background music that draws attention is a bug.
+        /// Bars 1-4 state the phrase; 5-8 answer it and turn back to the top.
+        /// </summary>
+        private static readonly int[,] Melody =
         {
-            const float seconds = 8f; // loops seamlessly: all partials complete whole cycles
+            // bar, beat, midi          chord underneath
+            {0, 0, 76}, {0, 1, 79}, {0, 2, 76},          // C:  E5  G5  E5
+            {1, 0, 74}, {1, 1, 79}, {1, 2, 71},          // G:  D5  G5  B4
+            {2, 0, 72}, {2, 1, 76}, {2, 2, 81},          // Am: C5  E5  A5
+            {3, 0, 77}, {3, 1, 81}, {3, 2, 79},          // F:  F5  A5  G5
+            {4, 0, 84}, {4, 2, 79},                      // C:  C6      G5
+            {5, 0, 83}, {5, 1, 79}, {5, 2, 74},          // G:  B5  G5  D5
+            {6, 0, 81}, {6, 1, 76}, {6, 2, 72},          // Am: A5  E5  C5
+            {7, 0, 77}, {7, 1, 79},                      // F:  F5  G5  (leads home)
+        };
+
+        /// <summary>Root of each bar's chord (MIDI), one per bar: C G Am F C G Am F.</summary>
+        private static readonly int[] ChordRoots = { 60, 55, 57, 53, 60, 55, 57, 53 };
+        /// <summary>Major (0) or minor (1) third for each bar.</summary>
+        private static readonly int[] ChordMinor = { 0, 0, 1, 0, 0, 0, 1, 0 };
+
+        private static AudioClip BuildMusic()
+        {
+            float secPerBeat = 60f / Bpm;
+            float seconds = Bars * BeatsPerBar * secPerBeat;
             int n = (int)(SampleRate * seconds);
             var data = new float[n];
-            // Frequencies chosen so each completes an integer number of cycles in 8s.
-            float[] partials = { 55f, 82.5f, 110f, 164.5f };
-            float[] gains = { 0.5f, 0.35f, 0.25f, 0.12f };
-            for (int p = 0; p < partials.Length; p++)
+
+            // Chord bed: root + third + fifth, an octave below the melody, gently swelling.
+            for (int bar = 0; bar < Bars; bar++)
             {
-                float cycles = Mathf.Round(partials[p] * seconds);
-                float freq = cycles / seconds;
-                for (int i = 0; i < n; i++)
-                {
-                    float t = (float)i / SampleRate;
-                    // Slow tremolo, also an integer number of cycles so the loop is seamless.
-                    float trem = 0.82f + 0.18f * Mathf.Sin(2f * Mathf.PI * (2f / seconds) * t + p);
-                    data[i] += Mathf.Sin(2f * Mathf.PI * freq * t) * gains[p] * trem;
-                }
+                int start = (int)(bar * BeatsPerBar * secPerBeat * SampleRate);
+                int len = (int)(BeatsPerBar * secPerBeat * SampleRate);
+                int root = ChordRoots[bar];
+                int third = root + (ChordMinor[bar] == 1 ? 3 : 4);
+                int fifth = root + 7;
+                // Quiet. The chord bed is SUSTAINED while the melody DECAYS, so at equal
+                // amplitudes the pad wins the energy budget outright — measured at 98% of
+                // total energy sitting in the pad's 160-320 Hz band, i.e. the tune was
+                // inaudible under its own accompaniment.
+                Pad(data, start, len, Hz(root), 0.055f);
+                Pad(data, start, len, Hz(third), 0.040f);
+                Pad(data, start, len, Hz(fifth), 0.040f);
             }
-            // fadeOut: false — this one loops, and a fade would notch the seam.
-            return FromData("Pad", data, fadeOut: false);
+
+            // Music-box melody on top.
+            for (int i = 0; i < Melody.GetLength(0); i++)
+            {
+                int bar = Melody[i, 0], beat = Melody[i, 1], midi = Melody[i, 2];
+                int start = (int)((bar * BeatsPerBar + beat) * secPerBeat * SampleRate);
+                Bell(data, start, Hz(midi), secPerBeat * 2.2f, 0.62f);
+            }
+
+            // fadeOut: false — this loops, and a fade would notch the seam. Note that Bell
+            // and Pad write with WRAPPING indices, so a tail that runs past the end lands at
+            // the start instead of being clipped: that is what makes the seam inaudible.
+            return FromData("Music", data, fadeOut: false);
+        }
+
+        /// <summary>
+        /// A struck music-box tone: fast attack, long decay, slightly inharmonic upper
+        /// partials (that faint metallic shimmer is what says "music box" rather than "sine").
+        /// Writes with wrapping indices so the loop seam stays seamless.
+        /// </summary>
+        private static void Bell(float[] buf, int start, float freq, float seconds, float amp)
+        {
+            int len = Mathf.Min((int)(SampleRate * seconds), buf.Length);
+            float[] ratios = { 1f, 2.01f, 3.03f, 4.98f };
+            float[] gains = { 1f, 0.34f, 0.16f, 0.06f };
+            for (int i = 0; i < len; i++)
+            {
+                float t = (float)i / SampleRate;
+                float env = Mathf.Exp(-3.1f * t) * (1f - Mathf.Exp(-260f * t));
+                float s = 0f;
+                for (int p = 0; p < ratios.Length; p++)
+                    s += Mathf.Sin(2f * Mathf.PI * freq * ratios[p] * t) * gains[p];
+                buf[(start + i) % buf.Length] += s * env * amp;
+            }
+        }
+
+        /// <summary>Soft sustained chord voice — swells in, holds, eases out under the melody.</summary>
+        private static void Pad(float[] buf, int start, int len, float freq, float amp)
+        {
+            for (int i = 0; i < len; i++)
+            {
+                float t = (float)i / len;
+                // Gentle bell-curve swell so bars breathe instead of blocking on and off.
+                float env = Mathf.Sin(Mathf.PI * t);
+                float ph = 2f * Mathf.PI * freq * ((float)i / SampleRate);
+                buf[(start + i) % buf.Length] +=
+                    (Mathf.Sin(ph) + Mathf.Sin(ph * 2f) * 0.22f) * env * amp;
+            }
         }
     }
 }

@@ -212,6 +212,28 @@ autonomously to completion. Full requirement detail: `PLAY_STORE_CHECKLIST.md`.
   glassy at ~1425 Hz on purpose — that contrast is the point. **LESSON: waveform plots
   verified envelope and clipping but say nothing about PITCH; measure the
   amplitude-weighted centre frequency in Hz and compare it against a musical reference.**
+- **MUSIC REWRITTEN 2026-07-20** (user: "background music is missing" + asked for Pet
+  Society's soundtrack). Two parts:
+  - **Why it was missing: REGISTER.** The "ambient pad" was built from partials at
+    **55-165 Hz** at volume 0.13. Phone speakers roll off hard below ~300 Hz and physically
+    cannot reproduce that — it was a music bed inaudible on the hardware it ships to.
+  - **Copyright:** using Pet Society's actual soundtrack (Playfish/EA) would be
+    infringement and risks takedown + the developer account. **Style is not copyrightable,
+    a recording is** — so the replacement is an ORIGINAL cosy waltz in that spirit: C major,
+    3/4, 92 BPM, 8 bars (~15.6s), music-box melody (sine + slightly inharmonic partials at
+    1/2.01/3.03/4.98 for the metallic shimmer) over a soft chord bed on I-V-vi-IV.
+  - **Seamless looping trick:** Bell/Pad write with WRAPPING indices, so a note's tail runs
+    past the end and lands at the start instead of being clipped. Measured seam step is
+    0.01× RMS (inaudible), with no crossfade needed.
+  - **BALANCE, measured:** a sustained pad beats a decaying melody on energy at equal
+    amplitude — the first draft put **98.4%** of all energy in the pad's 160-320 Hz band,
+    burying the tune under its own accompaniment. Pad dropped to 0.055/0.04/0.04 and the
+    bells raised to 0.62; now **92.4% sits in 320-2560 Hz**, where phone speakers are strong.
+  - **MEASUREMENT LESSON (I got this wrong twice in one session):** decimating a signal
+    before a DFT ALIASES everything above the new Nyquist and invents high-frequency energy
+    — my first spectrum reported a phantom 31% above 5 kHz. Use a Hann-windowed contiguous
+    block at the FULL sample rate, and average several windows across the loop so the answer
+    doesn't depend on whether one window landed between notes.
 - **PRIVACY PAGE added in-app** (Settings ▸ Privacy). Play requires a policy in the Console
   AND "a link **or text** within the app" — text satisfies the in-app half without needing a
   hosted URL. **The text asserts no data collection, no network, no ads, no analytics, which
