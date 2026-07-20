@@ -30,7 +30,10 @@ namespace CoralCascade.EditorTools
         // API 35 has been the floor for new apps since 2025-08-31; API 36 becomes mandatory
         // for new apps AND updates on 2026-08-31. Shipping 36 now avoids a forced redo.
         private const int TargetSdk = 36;
-        private const int MinSdk = 25;         // no Play-enforced floor; check the ads SDK's own
+        // Play enforces no minSdk floor, but UNITY 6 DOES: setting anything below 26 throws
+        // "Minimum supported Android API level is 26 (Android 8.0 Oreo)". The engine is the
+        // binding constraint here, not the store. Android 8.0+ is ~97% of active devices.
+        private const int MinSdk = 26;
 
         [MenuItem("Coral Cascade/Play Store/Apply Release Settings")]
         public static void Apply()
@@ -44,18 +47,27 @@ namespace CoralCascade.EditorTools
             PlayerSettings.companyName = "jhong03";
             PlayerSettings.productName = "Coral Cascade";
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, AppId);
-            log.AppendLine("  app id            " + AppId);
 
             // 64-bit only + IL2CPP: Play requires a 64-bit binary, and Mono cannot produce
             // one on Android — these two settings must move together.
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
-            log.AppendLine("  scripting         IL2CPP / ARM64");
 
             PlayerSettings.Android.minSdkVersion = (AndroidSdkVersions)MinSdk;
             PlayerSettings.Android.targetSdkVersion = (AndroidSdkVersions)TargetSdk;
             EditorUserBuildSettings.buildAppBundle = true; // Play requires AAB for new apps
-            log.AppendLine($"  sdk               min {MinSdk} / target {TargetSdk}, AAB on");
+
+            // Log what the editor ACTUALLY holds now, never what we asked for. Unity rejects
+            // some values outright (minSdk < 26 throws), and an earlier version of this log
+            // printed the constants — so it reported "min 25" while the setter had failed.
+            log.AppendLine("  app id            " +
+                           PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.Android));
+            log.AppendLine($"  scripting         " +
+                           $"{PlayerSettings.GetScriptingBackend(NamedBuildTarget.Android)} / " +
+                           $"{PlayerSettings.Android.targetArchitectures}");
+            log.AppendLine($"  sdk               min {(int)PlayerSettings.Android.minSdkVersion} / " +
+                           $"target {(int)PlayerSettings.Android.targetSdkVersion}, " +
+                           $"AAB {(EditorUserBuildSettings.buildAppBundle ? "on" : "OFF")}");
 
             // Portrait only — matches the 2026-07-16 decision and the whole layout.
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
@@ -148,6 +160,8 @@ namespace CoralCascade.EditorTools
             if ((int)PlayerSettings.Android.targetSdkVersion != 0 &&
                 (int)PlayerSettings.Android.targetSdkVersion < TargetSdk)
                 problems.Add($"target SDK is below {TargetSdk}");
+            if ((int)PlayerSettings.Android.minSdkVersion < MinSdk)
+                problems.Add($"min SDK is below {MinSdk} — Unity 6 refuses to build under Android 8.0");
             if (!EditorUserBuildSettings.buildAppBundle)
                 problems.Add("Build App Bundle is off — Play requires an AAB for new apps");
 

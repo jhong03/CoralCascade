@@ -15,7 +15,7 @@ Status as of 2026-07-19. Requirements verified against official Google sources o
 | Scripting backend | IL2CPP | required for ARM64 |
 | Architecture | ARM64 | Play requires a 64-bit binary; Unity ships native code, so this binds |
 | Target SDK | **36** | API 35 is the floor today; **36 becomes mandatory 2026-08-31** — shipping 36 now avoids a redo |
-| Min SDK | 25 | no Play-enforced floor; ⚠️ check the Google Mobile Ads SDK's own minimum when you add ads |
+| Min SDK | **26** (Android 8.0) | Play enforces no floor, but **Unity 6 refuses anything below 26**. Covers ~97% of active devices. ⚠️ also check the Google Mobile Ads SDK's own minimum when you add ads |
 | Orientation | portrait only | applied by the editor script |
 | Safe area | `renderOutsideSafeArea = true` + UI insets | pairs with the `SafeAreaUtil` work |
 | App icon | `Assets/Art/Icon/` | generated; adaptive foreground/background + legacy/round |
