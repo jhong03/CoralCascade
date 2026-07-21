@@ -1,0 +1,13 @@
+# GitHub Pages config. Serves this docs/ folder as https://jhong03.github.io/CoralCascade/
+#
+# Jekyll renders docs/privacy-policy.md -> /privacy-policy.html, which is the URL
+# that goes in the Play Console's privacy policy field. Rendering the markdown
+# rather than hand-writing a second HTML copy is deliberate: the policy MUST be
+# rewritten the day ads land, and two copies of it would drift apart.
+title: Coral Cascade
+description: A physics bubble shooter for Android.
+theme: jekyll-theme-cayman
+
+# The listing, the checklist and the in-app text are project docs, not web pages.
+exclude:
+  - "*.ps1"
